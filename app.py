@@ -10,35 +10,79 @@ st.set_page_config(
 st.html("""
 <style>
 :root {
-    --navy: #08131F;
-    --navy-2: #0E1724;
-    --panel: #111C2B;
-    --panel-2: #162538;
-    --ink: #F5F0E6;
+    --navy: #07111B;
+    --navy-2: #0B1726;
+    --navy-3: #102338;
+    --panel: rgba(17, 28, 43, 0.84);
+    --panel-2: rgba(22, 37, 56, 0.92);
+    --panel-3: rgba(15, 25, 39, 0.96);
+    --ink: #F8F4EA;
     --muted: #9FB0C3;
-    --line: #243244;
-    --blue: #7FB3FF;
-    --green: #1F6F50;
+    --line: rgba(143, 170, 203, 0.18);
+    --blue: #66B3FF;
+    --blue-2: #2D7FF9;
+    --green: #1E8E5A;
+    --green-2: #23B26D;
     --red: #C62828;
-    --clay: #A8572A;
-    --gold: #D6B25E;
-    --shadow: 0 10px 30px rgba(0,0,0,.28);
+    --red-2: #FF5A5F;
+    --clay: #B85E2F;
+    --gold: #E0B45C;
+    --gold-2: #F7D27A;
+    --ice: #DCEBFA;
+    --shadow: 0 14px 38px rgba(0,0,0,.30);
+    --shadow-soft: 0 10px 24px rgba(0,0,0,.20);
+    --glow-blue: 0 0 0 1px rgba(102,179,255,.18), 0 0 30px rgba(45,127,249,.12);
+    --glow-gold: 0 0 0 1px rgba(224,180,92,.18), 0 0 24px rgba(224,180,92,.10);
 }
 
 /* App shell */
 .stApp {
     background:
-        radial-gradient(circle at top left, rgba(127,179,255,.08), transparent 25%),
-        radial-gradient(circle at top right, rgba(168,87,42,.08), transparent 22%),
-        linear-gradient(180deg, #08131F 0%, #0B1624 100%);
+        radial-gradient(circle at 8% 10%, rgba(102,179,255,.14), transparent 18%),
+        radial-gradient(circle at 92% 8%, rgba(184,94,47,.12), transparent 16%),
+        radial-gradient(circle at 50% 100%, rgba(35,178,109,.07), transparent 20%),
+        linear-gradient(180deg, #06101A 0%, #091320 50%, #0A1522 100%);
     color: var(--ink);
 }
 
-/* Main width */
+/* subtle baseball seam accents */
+.stApp::before,
+.stApp::after {
+    content: "";
+    position: fixed;
+    width: 340px;
+    height: 340px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+    opacity: .055;
+    filter: blur(.2px);
+}
+.stApp::before {
+    top: 110px;
+    left: -170px;
+    border: 2px dashed rgba(248,244,234,.28);
+}
+.stApp::after {
+    bottom: -140px;
+    right: -150px;
+    border: 2px dashed rgba(248,244,234,.22);
+}
+
 .block-container {
-    padding-top: 1.2rem;
+    position: relative;
+    z-index: 1;
+    padding-top: 1rem;
     padding-bottom: 2rem;
-    max-width: 1500px;
+    max-width: 1520px;
+}
+
+/* Global typography polish */
+h1, h2, h3 {
+    letter-spacing: -0.02em;
+}
+p, div, span, label {
+    letter-spacing: 0.01em;
 }
 
 /* Hero */
@@ -46,15 +90,15 @@ st.html("""
     position: relative;
     overflow: hidden;
     background:
-        linear-gradient(135deg, rgba(255,255,255,.03), rgba(255,255,255,.01)),
-        linear-gradient(90deg, #0C1A2A 0%, #13233A 55%, #1B314F 100%);
-    border: 1px solid rgba(255,255,255,.08);
-    border-radius: 22px;
-    padding: 26px 28px;
+        linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.015)),
+        linear-gradient(115deg, #0A1726 0%, #11243A 48%, #193C63 78%, #1A3654 100%);
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 26px;
+    padding: 30px 30px 24px 30px;
     box-shadow: var(--shadow);
-    margin-bottom: 14px;
+    margin-bottom: 12px;
 }
-.hero:before {
+.hero::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -62,203 +106,396 @@ st.html("""
       repeating-linear-gradient(
         -45deg,
         transparent 0px,
-        transparent 14px,
-        rgba(255,255,255,.015) 14px,
-        rgba(255,255,255,.015) 16px
+        transparent 13px,
+        rgba(255,255,255,.02) 13px,
+        rgba(255,255,255,.02) 15px
       );
     pointer-events: none;
 }
+.hero::after {
+    content: "";
+    position: absolute;
+    right: -60px;
+    top: -60px;
+    width: 260px;
+    height: 260px;
+    background: radial-gradient(circle, rgba(224,180,92,.18), transparent 60%);
+    pointer-events: none;
+}
 .hero-kicker {
-    color: #B8C7D9;
+    color: #C7D6E8;
     font-size: .78rem;
     text-transform: uppercase;
-    letter-spacing: .16em;
-    font-weight: 700;
+    letter-spacing: .18em;
+    font-weight: 800;
     margin-bottom: 8px;
+}
+.hero-topline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 .hero h1 {
     margin: 0;
-    font-size: 2.1rem;
-    line-height: 1.05;
+    font-size: 2.4rem;
+    line-height: 1.02;
     color: white;
 }
+.hero-live {
+    background: linear-gradient(90deg, rgba(224,180,92,.18), rgba(255,255,255,.06));
+    border: 1px solid rgba(255,255,255,.10);
+    color: #FFF4D6;
+    border-radius: 999px;
+    padding: 10px 14px;
+    font-weight: 800;
+    font-size: .86rem;
+    box-shadow: var(--glow-gold);
+}
 .hero p {
-    margin: 10px 0 0 0;
-    color: #DDE7F2;
-    font-size: 1rem;
-    max-width: 900px;
+    margin: 12px 0 0 0;
+    color: #E2ECF7;
+    font-size: 1.02rem;
+    max-width: 960px;
 }
 .hero-badges {
-    margin-top: 16px;
+    margin-top: 18px;
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
 }
 .hero-badge {
-    background: rgba(255,255,255,.07);
-    border: 1px solid rgba(255,255,255,.09);
-    color: #F8FAFC;
-    padding: 8px 12px;
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.10);
+    color: #FAFCFF;
+    padding: 9px 13px;
     border-radius: 999px;
     font-size: .82rem;
-    font-weight: 600;
+    font-weight: 700;
+    box-shadow: var(--shadow-soft);
 }
 
+/* Ops strip */
+.ops-strip {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin: 4px 0 16px 0;
+}
+.ops-pill {
+    background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow-soft);
+}
+.ops-k {
+    color: #AFC0D3;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    font-size: .68rem;
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+.ops-v {
+    color: #FFFFFF;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+.ops-v.green { color: #7BE7A6; }
+.ops-v.gold { color: #FFD981; }
+.ops-v.blue { color: #99D0FF; }
+
 /* Ticker */
-.ticker-wrap {
-    margin: 10px 0 18px 0;
-    border-radius: 16px;
-    background: linear-gradient(90deg, #12243A, #173255);
-    border: 1px solid rgba(255,255,255,.08);
+.ticker-shell {
+    margin: 12px 0 18px 0;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,.09);
+    background:
+        linear-gradient(90deg, rgba(17,36,58,.96), rgba(21,45,74,.98) 45%, rgba(16,37,60,.96));
     box-shadow: var(--shadow);
     overflow: hidden;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: stretch;
 }
 .ticker-label {
-    display: inline-block;
-    background: #A8572A;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(180deg, #B85E2F, #8F431D);
     color: white;
-    font-weight: 800;
-    padding: 12px 14px;
-    letter-spacing: .06em;
+    font-weight: 900;
+    padding: 0 18px;
+    letter-spacing: .08em;
     font-size: .78rem;
     text-transform: uppercase;
-}
-.ticker {
-    display: inline-block;
     white-space: nowrap;
-    min-width: calc(100% - 120px);
-    color: #F8FAFC;
-    padding: 12px 0;
-    font-weight: 600;
+    border-right: 1px solid rgba(255,255,255,.08);
+}
+.ticker-label-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #FFD981;
+    box-shadow: 0 0 12px rgba(255,217,129,.7);
+}
+.ticker-window {
+    overflow: hidden;
+    position: relative;
 }
 .ticker-track {
-    display: inline-block;
-    padding-left: 100%;
-    animation: scroll-left 28s linear infinite;
+    display: flex;
+    width: max-content;
+    white-space: nowrap;
+    animation: ticker-scroll 90s linear infinite;
+    will-change: transform;
 }
-@keyframes scroll-left {
+.ticker-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    padding: 14px 0;
+}
+.ticker-item {
+    color: #F8FBFF;
+    font-weight: 700;
+    font-size: .94rem;
+    letter-spacing: .01em;
+}
+.ticker-sep {
+    color: #8EC2FF;
+    opacity: .95;
+    padding: 0 22px;
+    font-weight: 900;
+}
+@keyframes ticker-scroll {
     0% { transform: translateX(0); }
-    100% { transform: translateX(-100%); }
+    100% { transform: translateX(-50%); }
 }
 
 /* Cards */
 .uc-card {
-    background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
+    position: relative;
+    overflow: hidden;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.018)),
+        linear-gradient(180deg, rgba(17,28,43,.92), rgba(13,22,34,.92));
     border: 1px solid var(--line);
-    border-radius: 18px;
+    border-radius: 20px;
     padding: 18px 18px 16px;
     box-shadow: var(--shadow);
-    min-height: 122px;
+    min-height: 130px;
+}
+.uc-card::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(90deg, var(--gold), var(--blue));
+    opacity: .92;
+}
+.uc-card:hover {
+    transform: translateY(-2px);
+    transition: .18s ease;
+    box-shadow: 0 16px 40px rgba(0,0,0,.34);
 }
 .uc-label {
     color: var(--muted);
     text-transform: uppercase;
-    letter-spacing: .14em;
-    font-size: .72rem;
-    font-weight: 800;
+    letter-spacing: .15em;
+    font-size: .70rem;
+    font-weight: 900;
     margin-bottom: 10px;
 }
 .uc-value {
     color: white;
     font-size: 1.18rem;
-    font-weight: 800;
+    font-weight: 900;
     line-height: 1.2;
 }
 .uc-sub {
-    color: #C5D2E0;
+    color: #C8D7E7;
     font-size: .92rem;
-    margin-top: 6px;
+    margin-top: 7px;
+}
+.uc-status {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: .73rem;
+    font-weight: 800;
+    background: rgba(35,178,109,.12);
+    color: #8EF0B6;
+    border: 1px solid rgba(35,178,109,.26);
 }
 
 /* Rule result box */
 .rule-box {
-    background: linear-gradient(180deg, rgba(31,111,80,.18), rgba(31,111,80,.08));
+    background:
+        linear-gradient(180deg, rgba(31,111,80,.22), rgba(31,111,80,.10)),
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
     color: #F3FBF7;
     padding: 20px;
     border-radius: 18px;
-    border: 1px solid rgba(31,111,80,.55);
-    border-left: 6px solid #2DAA73;
+    border: 1px solid rgba(31,111,80,.52);
+    border-left: 6px solid #2DCC82;
     box-shadow: var(--shadow);
+}
+
+/* Panel wrappers */
+.panel-wrap {
+    background:
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 18px;
+    box-shadow: var(--shadow-soft);
+    margin-top: 6px;
 }
 
 /* Streamlit tabs */
 .stTabs [data-baseweb="tab-list"] {
-    gap: 8px;
+    gap: 10px;
+    margin-bottom: 4px;
 }
 .stTabs [data-baseweb="tab"] {
-    background: #101C2B;
+    background: linear-gradient(180deg, rgba(17,28,43,.92), rgba(14,24,37,.92));
     border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 10px 16px;
+    border-radius: 15px;
+    padding: 11px 18px;
     color: #DCE6F2;
-    font-weight: 700;
+    font-weight: 800;
+    box-shadow: var(--shadow-soft);
 }
 .stTabs [aria-selected="true"] {
-    background: linear-gradient(180deg, #163150, #1E4570);
-    border-color: #34699E !important;
+    background: linear-gradient(180deg, #17406B, #245B94) !important;
+    border-color: rgba(102,179,255,.42) !important;
     color: white !important;
+    box-shadow: var(--glow-blue);
 }
 
 /* Inputs */
 textarea, input {
     border-radius: 14px !important;
 }
+div[data-baseweb="textarea"] textarea,
+div[data-baseweb="input"] input {
+    background: rgba(10,19,31,.72) !important;
+    color: #F5F8FC !important;
+    border: 1px solid rgba(143,170,203,.18) !important;
+}
 
 /* Buttons */
 .stButton > button {
     width: 100%;
     border-radius: 999px;
-    padding: 0.85rem 1rem;
-    font-weight: 800;
-    border: 1px solid transparent;
+    padding: 0.92rem 1rem;
+    font-weight: 900;
+    letter-spacing: 0.01em;
+    border: 1px solid rgba(255,255,255,.08);
     transition: all .18s ease;
-    box-shadow: 0 6px 18px rgba(0,0,0,.22);
+    box-shadow: 0 8px 22px rgba(0,0,0,.24);
+    background: linear-gradient(180deg, #215794, #173F6A);
+    color: white;
 }
 .stButton > button:hover {
     transform: translateY(-2px);
-    filter: brightness(1.05);
+    filter: brightness(1.06);
+    box-shadow: 0 14px 28px rgba(0,0,0,.28);
 }
 
-/* Optional role classes for HTML-based action blocks */
-.action-row {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    margin-top: 8px;
+/* Metrics */
+div[data-testid="stMetric"] {
+    background:
+        linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015)),
+        linear-gradient(180deg, rgba(16,28,44,.96), rgba(11,20,31,.96));
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow-soft);
+}
+div[data-testid="stMetricLabel"] {
+    color: #B4C5D7 !important;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    font-size: .72rem !important;
+    font-weight: 800 !important;
+}
+div[data-testid="stMetricValue"] {
+    color: #FFFFFF !important;
+    font-weight: 900 !important;
 }
 
-/* Sidebar polish */
+/* Alerts / info polish */
+div[data-testid="stAlert"] {
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,.08);
+    box-shadow: var(--shadow-soft);
+}
+
+/* Sidebar */
 section[data-testid="stSidebar"] {
     border-right: 1px solid var(--line);
+    background:
+        linear-gradient(180deg, rgba(10,18,29,.98), rgba(8,15,24,.98)) !important;
 }
 section[data-testid="stSidebar"] .block-container {
     padding-top: 1rem;
 }
 .sidebar-box {
-    background: linear-gradient(180deg, #132033, #101A29);
+    background: linear-gradient(180deg, rgba(20,33,51,.92), rgba(14,23,36,.94));
     border: 1px solid var(--line);
     border-radius: 18px;
     padding: 16px;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-soft);
     margin-bottom: 12px;
 }
 .sidebar-title {
     text-transform: uppercase;
     letter-spacing: .14em;
     font-size: .72rem;
-    font-weight: 800;
-    color: #AFC0D3;
+    font-weight: 900;
+    color: #B7C8DA;
     margin-bottom: 10px;
 }
 .small-note {
-    color: #9FB0C3;
-    font-size: .84rem;
+    color: #A2B3C5;
+    font-size: .86rem;
+    line-height: 1.45;
 }
 
-/* Section spacing */
-.section-gap {
-    margin-top: 10px;
-    margin-bottom: 12px;
+/* Footer caption */
+.app-footer {
+    margin-top: 18px;
+    color: #A9B9CA;
+    font-size: .88rem;
+    text-align: center;
+    padding-bottom: 10px;
+    letter-spacing: .01em;
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+    .ops-strip {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+@media (max-width: 700px) {
+    .ops-strip {
+        grid-template-columns: 1fr;
+    }
+    .hero h1 {
+        font-size: 1.9rem;
+    }
+    .ticker-label {
+        padding: 0 12px;
+    }
 }
 </style>
 """)
@@ -267,33 +504,79 @@ section[data-testid="stSidebar"] .block-container {
 st.html("""
 <div class="hero">
     <div class="hero-kicker">Elite Officiating Operations Platform</div>
-    <h1>🧢 UmpCompanion</h1>
+    <div class="hero-topline">
+        <h1>🧢 UmpCompanion</h1>
+        <div class="hero-live">● LIVE GAME DAY MODE</div>
+    </div>
     <p>
         Professional game-day support for serious baseball umpires — rules, crew tools,
-        assignment visibility, safety workflows, and certification tracking in one clean command center.
+        assignment visibility, safety workflows, crew communication, and certification tracking
+        in one polished command center.
     </p>
     <div class="hero-badges">
         <div class="hero-badge">NFHS / NCAA / OBR Ready</div>
-        <div class="hero-badge">Fast Crew Communication</div>
-        <div class="hero-badge">Incident & Safety Tools</div>
-        <div class="hero-badge">Built to Scale for Associations</div>
+        <div class="hero-badge">Live Crew Coordination</div>
+        <div class="hero-badge">Incident & Safety Workflows</div>
+        <div class="hero-badge">Association-Scale Ready</div>
     </div>
 </div>
 """)
 
-# LIVE TICKER
+# OPS STRIP
 st.html("""
-<div class="ticker-wrap">
-    <span class="ticker-label">Live Feed</span>
-    <span class="ticker">
-        <span class="ticker-track">
-            🚨 2026 NFHS Rule Update: New Obstruction Clarification &nbsp;&nbsp;•&nbsp;&nbsp;
-            📅 Annual Clinic This Saturday at 9:00 AM &nbsp;&nbsp;•&nbsp;&nbsp;
-            🌤️ Today's Slate: Clear skies, low lightning risk &nbsp;&nbsp;•&nbsp;&nbsp;
-            ✅ 14 umpires completed annual testing this week &nbsp;&nbsp;•&nbsp;&nbsp;
-            💡 Pregame Focus: Partner positioning on rotations and trapped-ball communication
-        </span>
-    </span>
+<div class="ops-strip">
+    <div class="ops-pill">
+        <div class="ops-k">Assignment</div>
+        <div class="ops-v gold">Varsity HS • 4:00 PM</div>
+    </div>
+    <div class="ops-pill">
+        <div class="ops-k">Site</div>
+        <div class="ops-v">Field 7 • Saratoga Springs</div>
+    </div>
+    <div class="ops-pill">
+        <div class="ops-k">Partner Status</div>
+        <div class="ops-v green">ETA 6 Minutes</div>
+    </div>
+    <div class="ops-pill">
+        <div class="ops-k">Weather</div>
+        <div class="ops-v blue">68°F • Clear • No Lightning</div>
+    </div>
+    <div class="ops-pill">
+        <div class="ops-k">Ruleset</div>
+        <div class="ops-v">NFHS Loaded</div>
+    </div>
+</div>
+""")
+
+# CONTINUOUS TICKER
+ticker_content = """
+<span class="ticker-item">🚨 2026 NFHS Rule Update: New obstruction clarification in effect</span>
+<span class="ticker-sep">•</span>
+<span class="ticker-item">📅 Annual mechanics clinic this Saturday at 9:00 AM</span>
+<span class="ticker-sep">•</span>
+<span class="ticker-item">🌤️ Tonight’s slate: clear skies, low lightning risk across local fields</span>
+<span class="ticker-sep">•</span>
+<span class="ticker-item">✅ 14 umpires completed annual certification this week</span>
+<span class="ticker-sep">•</span>
+<span class="ticker-item">💡 Pregame point of emphasis: trapped-ball communication and rotations</span>
+<span class="ticker-sep">•</span>
+<span class="ticker-item">🧭 Crew arrival window active: parking side confirmed for Field 7</span>
+<span class="ticker-sep">•</span>
+"""
+
+st.html(f"""
+<div class="ticker-shell">
+    <div class="ticker-label"><span class="ticker-label-dot"></span> Live Feed</div>
+    <div class="ticker-window">
+        <div class="ticker-track">
+            <div class="ticker-content">
+                {ticker_content}
+            </div>
+            <div class="ticker-content">
+                {ticker_content}
+            </div>
+        </div>
+    </div>
 </div>
 """)
 
@@ -304,8 +587,9 @@ with col1:
     st.html("""
     <div class="uc-card">
         <div class="uc-label">Today's Assignment</div>
-        <div class="uc-value">Varsity HS • 4:00 PM</div>
-        <div class="uc-sub">Field 7 • Saratoga Springs</div>
+        <div class="uc-value">Varsity High School • 4:00 PM</div>
+        <div class="uc-sub">Field 7 • Plate meeting in 42 minutes</div>
+        <div class="uc-status">Ready for first pitch</div>
     </div>
     """)
 
@@ -315,6 +599,7 @@ with col2:
         <div class="uc-label">Crew Partner</div>
         <div class="uc-value">ETA 6 Minutes 🟢</div>
         <div class="uc-sub">Route active • parking side confirmed</div>
+        <div class="uc-status">Crew arrival on pace</div>
     </div>
     """)
 
@@ -324,6 +609,7 @@ with col3:
         <div class="uc-label">Weather Window</div>
         <div class="uc-value">68°F • Clear</div>
         <div class="uc-sub">No lightning concern at first pitch</div>
+        <div class="uc-status">Playable conditions</div>
     </div>
     """)
 
@@ -331,8 +617,9 @@ with col4:
     st.html("""
     <div class="uc-card">
         <div class="uc-label">Ruleset Loaded</div>
-        <div class="uc-value">NFHS</div>
-        <div class="uc-sub">Varsity baseball profile active</div>
+        <div class="uc-value">NFHS Varsity Profile</div>
+        <div class="uc-sub">Context-aware rule support active</div>
+        <div class="uc-status">Rule engine armed</div>
     </div>
     """)
 
@@ -343,13 +630,15 @@ with tab1:
     st.subheader("Instant Rule Advisor")
     st.caption("Current profile auto-loaded: Varsity High School Baseball • NFHS")
 
-    left, right = st.columns([1.3, 1])
+    left, right = st.columns([1.35, 1])
 
     with left:
+        st.markdown('<div class="panel-wrap">', unsafe_allow_html=True)
+
         situation = st.text_area(
             "Describe the play:",
             "Runner on first, ground ball to shortstop. Fielder obstructs the runner.",
-            height=140,
+            height=145,
             placeholder="Example: R1 stealing, throw from catcher pulls F6 into the baseline..."
         )
 
@@ -362,13 +651,15 @@ with tab1:
                 Place all other runners accordingly.
             </div>
             """)
-            st.success("Ruling returned fast — clear, confident, and field-usable.")
+            st.success("Ruling returned fast — clean, clear, and field-usable.")
+
+        st.markdown('</div>', unsafe_allow_html=True)
 
     with right:
         st.metric("Most Common Call Tonight", "Obstruction / Interference")
         st.metric("Rulebook Loaded", "NFHS")
         st.metric("Confidence Mode", "High")
-        st.info("Tip: show the dead-ball signal decisively, then separate obstruction from interference in your verbal explanation.")
+        st.info("Game note: kill the play decisively, then verbalize obstruction separately from interference so coaches hear command, not confusion.")
 
 with tab2:
     st.subheader("Game Day Toolkit")
@@ -379,27 +670,28 @@ with tab2:
             st.info("Opening exact field pin with preferred parking approach.")
     with top_b:
         if st.button("📝 Generate Incident Report", use_container_width=True):
-            st.success("Professional PDF created and queued for send.")
+            st.success("Professional incident report created and ready for review.")
     with top_c:
         if st.button("🔄 Find Replacement Umpire", use_container_width=True):
             st.info("Nearest qualified official pinged. Assignor copied.")
 
-    danger_a, danger_b = st.columns([1, 1])
+    danger_a, danger_b = st.columns(2)
     with danger_a:
         if st.button("🚨 Emergency Alert", use_container_width=True):
             st.error("Immediate alert sent to Assignor, Safety Contact, and emergency workflow.")
     with danger_b:
         if st.button("📞 Contact Crew Chief", use_container_width=True):
-            st.success("Crew channel opened.")
+            st.success("Crew communication lane opened.")
 
     st.markdown("")
+    st.subheader("Live Game Counter")
     g1, g2, g3, g4 = st.columns(4)
     g1.metric("Balls", "2")
     g2.metric("Strikes", "1")
     g3.metric("Outs", "0")
     g4.metric("Pitch Count", "47")
 
-    st.caption("Live counter should eventually become a giant tap-friendly plate view for mobile use. Big, bold, no squinting nonsense.")
+    st.caption("Designed to evolve into a larger tap-friendly field view for fast game use on mobile.")
 
 with tab3:
     st.subheader("Private Crew Chat")
@@ -424,31 +716,35 @@ with tab3:
 
 with st.sidebar:
     st.markdown("## UmpCompanion")
-    st.caption("Built for associations, assignors, and working umpires")
+    st.caption("Game-day operations for working umpires and associations")
 
     st.html("""
     <div class="sidebar-box">
         <div class="sidebar-title">Crew Control Panel</div>
-        <div class="small-note">Fast access to rule help, safety workflows, crew communication, and assignment operations.</div>
+        <div class="small-note">Fast access to rules support, safety workflows, communication, assignment operations, and live game status.</div>
     </div>
     """)
 
-    st.success("Professional • Fast • Reliable")
+    st.success("Live • Fast • Professional")
     st.info(
         "• Context-aware rule lookup\n"
         "• One-tap safety & incident tools\n"
-        "• Sub helper for assignors\n"
-        "• Private crew chat\n"
+        "• Replacement helper for assignors\n"
+        "• Private crew communication\n"
         "• Certification tracking"
     )
 
     st.html("""
     <div class="sidebar-box">
-        <div class="sidebar-title">Next-Level Additions</div>
+        <div class="sidebar-title">Operational Add-Ons</div>
         <div class="small-note">
-            GPS arrival check-in • crew availability board • weather radar tile • lightning timer • digital lineup card • ejection log • association analytics
+            GPS arrival check-in • crew availability board • live radar tile • lightning delay timer • digital lineup card • ejection log • association analytics
         </div>
     </div>
     """)
 
-st.caption("Live demo build • premium baseball operations aesthetic • ready to impress your assignor without looking like a science fair project")
+st.html("""
+<div class="app-footer">
+    UmpCompanion live prototype • game-day command center • built for serious baseball operations
+</div>
+""")
