@@ -1,4 +1,5 @@
 import streamlit as st
+from datetime import datetime, timedelta
 
 st.set_page_config(
     page_title="UmpCompanion",
@@ -7,94 +8,148 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# -----------------------------
+# Session State
+# -----------------------------
+if "checked_in" not in st.session_state:
+    st.session_state.checked_in = False
+if "check_in_time" not in st.session_state:
+    st.session_state.check_in_time = None
+if "game_started" not in st.session_state:
+    st.session_state.game_started = False
+if "first_pitch_time" not in st.session_state:
+    st.session_state.first_pitch_time = None
+if "weather_status" not in st.session_state:
+    st.session_state.weather_status = "clear"
+
+# -----------------------------
+# Static demo values
+# -----------------------------
+current_time = datetime.now()
+game_site = "Field 7 • Saratoga Springs"
+assignment = "Varsity High School"
+ruleset = "NFHS Varsity"
+partner_eta = "6 Minutes"
+weather_temp = "68°F"
+weather_summary = "Clear"
+lightning_risk = "No Lightning"
+
+# Demo game time set for today at 4:00 PM
+game_time = current_time.replace(hour=16, minute=0, second=0, microsecond=0)
+if current_time.hour >= 18:
+    game_time = game_time + timedelta(days=1)
+
+plate_meeting_time = game_time - timedelta(minutes=15)
+
+# -----------------------------
+# Helpers
+# -----------------------------
+def format_dt(dt):
+    if not dt:
+        return "—"
+    return dt.strftime("%I:%M %p").lstrip("0")
+
+def format_td(td):
+    total_seconds = max(0, int(td.total_seconds()))
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+    if hours > 0:
+        return f"{hours:02}:{minutes:02}:{seconds:02}"
+    return f"{minutes:02}:{seconds:02}"
+
+plate_meeting_countdown = plate_meeting_time - current_time
+first_pitch_countdown = game_time - current_time
+
+# -----------------------------
+# CSS
+# -----------------------------
 st.html("""
 <style>
 :root {
-    --navy: #07111B;
+    --navy: #06101A;
     --navy-2: #0B1726;
     --navy-3: #102338;
-    --panel: rgba(17, 28, 43, 0.84);
-    --panel-2: rgba(22, 37, 56, 0.92);
-    --panel-3: rgba(15, 25, 39, 0.96);
+    --panel: rgba(15, 24, 37, 0.88);
+    --panel-2: rgba(18, 31, 48, 0.94);
+    --panel-3: rgba(12, 22, 34, 0.98);
     --ink: #F8F4EA;
-    --muted: #9FB0C3;
-    --line: rgba(143, 170, 203, 0.18);
-    --blue: #66B3FF;
-    --blue-2: #2D7FF9;
+    --muted: #A9BACC;
+    --line: rgba(155, 178, 205, 0.16);
+    --blue: #67B5FF;
+    --blue-2: #2B80F7;
     --green: #1E8E5A;
-    --green-2: #23B26D;
-    --red: #C62828;
-    --red-2: #FF5A5F;
+    --green-2: #27C174;
+    --green-3: #A7FFD0;
+    --red: #D83535;
+    --red-2: #FF6A6F;
     --clay: #B85E2F;
-    --gold: #E0B45C;
-    --gold-2: #F7D27A;
-    --ice: #DCEBFA;
-    --shadow: 0 14px 38px rgba(0,0,0,.30);
-    --shadow-soft: 0 10px 24px rgba(0,0,0,.20);
-    --glow-blue: 0 0 0 1px rgba(102,179,255,.18), 0 0 30px rgba(45,127,249,.12);
-    --glow-gold: 0 0 0 1px rgba(224,180,92,.18), 0 0 24px rgba(224,180,92,.10);
+    --gold: #E3B861;
+    --gold-2: #FFD981;
+    --ice: #DFECF9;
+    --shadow: 0 14px 38px rgba(0,0,0,.32);
+    --shadow-soft: 0 10px 26px rgba(0,0,0,.22);
+    --glow-blue: 0 0 0 1px rgba(103,181,255,.20), 0 0 32px rgba(43,128,247,.14);
+    --glow-gold: 0 0 0 1px rgba(227,184,97,.18), 0 0 24px rgba(227,184,97,.12);
+    --glow-green: 0 0 0 1px rgba(39,193,116,.20), 0 0 22px rgba(39,193,116,.12);
 }
 
-/* App shell */
 .stApp {
     background:
-        radial-gradient(circle at 8% 10%, rgba(102,179,255,.14), transparent 18%),
-        radial-gradient(circle at 92% 8%, rgba(184,94,47,.12), transparent 16%),
-        radial-gradient(circle at 50% 100%, rgba(35,178,109,.07), transparent 20%),
-        linear-gradient(180deg, #06101A 0%, #091320 50%, #0A1522 100%);
+        radial-gradient(circle at 7% 10%, rgba(103,181,255,.12), transparent 18%),
+        radial-gradient(circle at 92% 8%, rgba(184,94,47,.10), transparent 16%),
+        radial-gradient(circle at 50% 100%, rgba(39,193,116,.06), transparent 20%),
+        linear-gradient(180deg, #06101A 0%, #08131F 45%, #091522 100%);
     color: var(--ink);
 }
 
-/* subtle baseball seam accents */
 .stApp::before,
 .stApp::after {
     content: "";
     position: fixed;
-    width: 340px;
-    height: 340px;
+    width: 320px;
+    height: 320px;
     border-radius: 50%;
     pointer-events: none;
     z-index: 0;
-    opacity: .055;
-    filter: blur(.2px);
+    opacity: .05;
 }
 .stApp::before {
-    top: 110px;
-    left: -170px;
-    border: 2px dashed rgba(248,244,234,.28);
+    top: 120px;
+    left: -160px;
+    border: 2px dashed rgba(248,244,234,.24);
 }
 .stApp::after {
-    bottom: -140px;
+    bottom: -120px;
     right: -150px;
-    border: 2px dashed rgba(248,244,234,.22);
+    border: 2px dashed rgba(248,244,234,.18);
 }
 
 .block-container {
     position: relative;
     z-index: 1;
-    padding-top: 1rem;
+    max-width: 1500px;
+    padding-top: 0.8rem;
     padding-bottom: 2rem;
-    max-width: 1520px;
 }
 
-/* Global typography polish */
 h1, h2, h3 {
     letter-spacing: -0.02em;
+    color: white;
 }
 p, div, span, label {
     letter-spacing: 0.01em;
 }
 
-/* Hero */
 .hero {
     position: relative;
     overflow: hidden;
     background:
-        linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.015)),
-        linear-gradient(115deg, #0A1726 0%, #11243A 48%, #193C63 78%, #1A3654 100%);
+        linear-gradient(135deg, rgba(255,255,255,.055), rgba(255,255,255,.012)),
+        linear-gradient(115deg, #0A1726 0%, #102338 48%, #16395E 78%, #19334F 100%);
     border: 1px solid rgba(255,255,255,.09);
-    border-radius: 26px;
-    padding: 30px 30px 24px 30px;
+    border-radius: 24px;
+    padding: 22px 24px 20px 24px;
     box-shadow: var(--shadow);
     margin-bottom: 12px;
 }
@@ -107,110 +162,170 @@ p, div, span, label {
         -45deg,
         transparent 0px,
         transparent 13px,
-        rgba(255,255,255,.02) 13px,
-        rgba(255,255,255,.02) 15px
+        rgba(255,255,255,.018) 13px,
+        rgba(255,255,255,.018) 15px
       );
     pointer-events: none;
 }
 .hero::after {
     content: "";
     position: absolute;
-    right: -60px;
-    top: -60px;
-    width: 260px;
-    height: 260px;
-    background: radial-gradient(circle, rgba(224,180,92,.18), transparent 60%);
+    right: -65px;
+    top: -65px;
+    width: 220px;
+    height: 220px;
+    background: radial-gradient(circle, rgba(227,184,97,.16), transparent 60%);
     pointer-events: none;
 }
 .hero-kicker {
     color: #C7D6E8;
-    font-size: .78rem;
+    font-size: .72rem;
     text-transform: uppercase;
     letter-spacing: .18em;
-    font-weight: 800;
+    font-weight: 900;
     margin-bottom: 8px;
 }
 .hero-topline {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: 14px;
     flex-wrap: wrap;
 }
 .hero h1 {
     margin: 0;
-    font-size: 2.4rem;
+    font-size: 2.15rem;
     line-height: 1.02;
-    color: white;
 }
 .hero-live {
-    background: linear-gradient(90deg, rgba(224,180,92,.18), rgba(255,255,255,.06));
-    border: 1px solid rgba(255,255,255,.10);
+    background: linear-gradient(90deg, rgba(227,184,97,.18), rgba(255,255,255,.06));
+    border: 1px solid rgba(255,255,255,.12);
     color: #FFF4D6;
     border-radius: 999px;
-    padding: 10px 14px;
-    font-weight: 800;
-    font-size: .86rem;
+    padding: 9px 14px;
+    font-weight: 900;
+    font-size: .84rem;
     box-shadow: var(--glow-gold);
 }
 .hero p {
-    margin: 12px 0 0 0;
+    margin: 10px 0 0 0;
     color: #E2ECF7;
-    font-size: 1.02rem;
-    max-width: 960px;
+    font-size: 1rem;
+    max-width: 980px;
 }
 .hero-badges {
-    margin-top: 18px;
+    margin-top: 14px;
     display: flex;
-    gap: 10px;
+    gap: 9px;
     flex-wrap: wrap;
 }
 .hero-badge {
     background: rgba(255,255,255,.08);
     border: 1px solid rgba(255,255,255,.10);
     color: #FAFCFF;
-    padding: 9px 13px;
+    padding: 8px 12px;
     border-radius: 999px;
-    font-size: .82rem;
-    font-weight: 700;
+    font-size: .80rem;
+    font-weight: 800;
     box-shadow: var(--shadow-soft);
 }
 
-/* Ops strip */
-.ops-strip {
+.command-strip {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 12px;
-    margin: 4px 0 16px 0;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 6px 0 14px 0;
 }
-.ops-pill {
+.command-pill {
     background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
     border: 1px solid var(--line);
-    border-radius: 18px;
-    padding: 14px 16px;
+    border-radius: 16px;
+    padding: 13px 14px;
     box-shadow: var(--shadow-soft);
 }
-.ops-k {
+.command-k {
     color: #AFC0D3;
     text-transform: uppercase;
     letter-spacing: .14em;
-    font-size: .68rem;
-    font-weight: 800;
-    margin-bottom: 6px;
+    font-size: .66rem;
+    font-weight: 900;
+    margin-bottom: 5px;
 }
-.ops-v {
-    color: #FFFFFF;
+.command-v {
+    color: #FFF;
     font-size: 1rem;
-    font-weight: 800;
+    font-weight: 900;
     line-height: 1.2;
 }
-.ops-v.green { color: #7BE7A6; }
-.ops-v.gold { color: #FFD981; }
-.ops-v.blue { color: #99D0FF; }
+.command-v.green { color: #94F0BD; }
+.command-v.blue { color: #A5D2FF; }
+.command-v.gold { color: #FFD981; }
 
-/* Ticker */
+.panel {
+    position: relative;
+    overflow: hidden;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.018)),
+        linear-gradient(180deg, rgba(17,28,43,.92), rgba(13,22,34,.92));
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 18px;
+    box-shadow: var(--shadow);
+}
+.panel::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--gold), var(--blue));
+    opacity: .95;
+}
+.panel-title {
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .16em;
+    font-size: .70rem;
+    font-weight: 900;
+    margin-bottom: 10px;
+}
+.panel-big {
+    color: white;
+    font-size: 1.3rem;
+    font-weight: 900;
+    line-height: 1.15;
+}
+.panel-sub {
+    color: #C9D8E8;
+    font-size: .95rem;
+    margin-top: 7px;
+}
+.status-pill {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    font-size: .76rem;
+    font-weight: 900;
+    background: rgba(39,193,116,.13);
+    color: var(--green-3);
+    border: 1px solid rgba(39,193,116,.34);
+    box-shadow: var(--glow-green);
+}
+.status-pill.warn {
+    background: rgba(227,184,97,.12);
+    color: #FFE39C;
+    border: 1px solid rgba(227,184,97,.34);
+    box-shadow: var(--glow-gold);
+}
+.status-pill.alert {
+    background: rgba(216,53,53,.14);
+    color: #FFC1C1;
+    border: 1px solid rgba(216,53,53,.34);
+    box-shadow: 0 0 0 1px rgba(216,53,53,.18), 0 0 22px rgba(216,53,53,.12);
+}
+
 .ticker-shell {
-    margin: 12px 0 18px 0;
+    margin: 14px 0 16px 0;
     border-radius: 18px;
     border: 1px solid rgba(255,255,255,.09);
     background:
@@ -250,25 +365,25 @@ p, div, span, label {
     display: flex;
     width: max-content;
     white-space: nowrap;
-    animation: ticker-scroll 90s linear infinite;
+    animation: ticker-scroll 120s linear infinite;
     will-change: transform;
 }
 .ticker-content {
     display: inline-flex;
     align-items: center;
     gap: 0;
-    padding: 14px 0;
+    padding: 13px 0;
 }
 .ticker-item {
     color: #F8FBFF;
-    font-weight: 700;
-    font-size: .94rem;
+    font-weight: 800;
+    font-size: .92rem;
     letter-spacing: .01em;
 }
 .ticker-sep {
     color: #8EC2FF;
     opacity: .95;
-    padding: 0 22px;
+    padding: 0 20px;
     font-weight: 900;
 }
 @keyframes ticker-scroll {
@@ -276,93 +391,13 @@ p, div, span, label {
     100% { transform: translateX(-50%); }
 }
 
-/* Cards */
-.uc-card {
-    position: relative;
-    overflow: hidden;
-    background:
-        linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.018)),
-        linear-gradient(180deg, rgba(17,28,43,.92), rgba(13,22,34,.92));
-    border: 1px solid var(--line);
-    border-radius: 20px;
-    padding: 18px 18px 16px;
-    box-shadow: var(--shadow);
-    min-height: 130px;
-}
-.uc-card::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 3px;
-    background: linear-gradient(90deg, var(--gold), var(--blue));
-    opacity: .92;
-}
-.uc-card:hover {
-    transform: translateY(-2px);
-    transition: .18s ease;
-    box-shadow: 0 16px 40px rgba(0,0,0,.34);
-}
-.uc-label {
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: .15em;
-    font-size: .70rem;
-    font-weight: 900;
-    margin-bottom: 10px;
-}
-.uc-value {
-    color: white;
-    font-size: 1.18rem;
-    font-weight: 900;
-    line-height: 1.2;
-}
-.uc-sub {
-    color: #C8D7E7;
-    font-size: .92rem;
-    margin-top: 7px;
-}
-.uc-status {
-    display: inline-block;
-    margin-top: 10px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    font-size: .73rem;
-    font-weight: 800;
-    background: rgba(35,178,109,.12);
-    color: #8EF0B6;
-    border: 1px solid rgba(35,178,109,.26);
+.quick-actions-wrap {
+    margin: 8px 0 14px 0;
 }
 
-/* Rule result box */
-.rule-box {
-    background:
-        linear-gradient(180deg, rgba(31,111,80,.22), rgba(31,111,80,.10)),
-        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
-    color: #F3FBF7;
-    padding: 20px;
-    border-radius: 18px;
-    border: 1px solid rgba(31,111,80,.52);
-    border-left: 6px solid #2DCC82;
-    box-shadow: var(--shadow);
-}
-
-/* Panel wrappers */
-.panel-wrap {
-    background:
-        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
-    border: 1px solid var(--line);
-    border-radius: 20px;
-    padding: 18px;
-    box-shadow: var(--shadow-soft);
-    margin-top: 6px;
-}
-
-/* Streamlit tabs */
 .stTabs [data-baseweb="tab-list"] {
     gap: 10px;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
 }
 .stTabs [data-baseweb="tab"] {
     background: linear-gradient(180deg, rgba(17,28,43,.92), rgba(14,24,37,.92));
@@ -370,28 +405,27 @@ p, div, span, label {
     border-radius: 15px;
     padding: 11px 18px;
     color: #DCE6F2;
-    font-weight: 800;
+    font-weight: 900;
     box-shadow: var(--shadow-soft);
 }
 .stTabs [aria-selected="true"] {
     background: linear-gradient(180deg, #17406B, #245B94) !important;
-    border-color: rgba(102,179,255,.42) !important;
+    border-color: rgba(103,181,255,.42) !important;
     color: white !important;
     box-shadow: var(--glow-blue);
 }
 
-/* Inputs */
-textarea, input {
+textarea, input, select {
     border-radius: 14px !important;
 }
 div[data-baseweb="textarea"] textarea,
-div[data-baseweb="input"] input {
-    background: rgba(10,19,31,.72) !important;
+div[data-baseweb="input"] input,
+div[data-baseweb="select"] > div {
+    background: rgba(10,19,31,.74) !important;
     color: #F5F8FC !important;
     border: 1px solid rgba(143,170,203,.18) !important;
 }
 
-/* Buttons */
 .stButton > button {
     width: 100%;
     border-radius: 999px;
@@ -410,7 +444,6 @@ div[data-baseweb="input"] input {
     box-shadow: 0 14px 28px rgba(0,0,0,.28);
 }
 
-/* Metrics */
 div[data-testid="stMetric"] {
     background:
         linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015)),
@@ -432,14 +465,12 @@ div[data-testid="stMetricValue"] {
     font-weight: 900 !important;
 }
 
-/* Alerts / info polish */
 div[data-testid="stAlert"] {
     border-radius: 16px;
     border: 1px solid rgba(255,255,255,.08);
     box-shadow: var(--shadow-soft);
 }
 
-/* Sidebar */
 section[data-testid="stSidebar"] {
     border-right: 1px solid var(--line);
     background:
@@ -470,7 +501,6 @@ section[data-testid="stSidebar"] .block-container {
     line-height: 1.45;
 }
 
-/* Footer caption */
 .app-footer {
     margin-top: 18px;
     color: #A9B9CA;
@@ -480,27 +510,59 @@ section[data-testid="stSidebar"] .block-container {
     letter-spacing: .01em;
 }
 
-/* Responsive */
 @media (max-width: 1100px) {
-    .ops-strip {
+    .command-strip {
         grid-template-columns: repeat(2, 1fr);
     }
 }
 @media (max-width: 700px) {
-    .ops-strip {
-        grid-template-columns: 1fr;
+    .command-strip {
+        grid-template-columns: repeat(2, 1fr);
     }
     .hero h1 {
-        font-size: 1.9rem;
+        font-size: 1.82rem;
     }
     .ticker-label {
         padding: 0 12px;
+    }
+    .hero {
+        padding: 18px 18px 16px 18px;
     }
 }
 </style>
 """)
 
-# HERO
+# -----------------------------
+# Weather alert presentation
+# -----------------------------
+weather_map = {
+    "clear": {
+        "title": "Clear / Playable",
+        "pill_class": "status-pill",
+        "pill_text": "Playable conditions",
+        "alert_func": "success",
+        "alert_text": "Radar clear in this prototype view. No lightning concern at first pitch."
+    },
+    "caution": {
+        "title": "Weather Caution",
+        "pill_class": "status-pill warn",
+        "pill_text": "Monitor conditions",
+        "alert_func": "warning",
+        "alert_text": "Weather caution mode active. Radar monitoring recommended and crew should stay alert."
+    },
+    "lightning": {
+        "title": "Lightning Alert",
+        "pill_class": "status-pill alert",
+        "pill_text": "Suspend play / clear field",
+        "alert_func": "error",
+        "alert_text": "Lightning alert mode active. Suspend play, clear the field, and begin your delay protocol."
+    }
+}
+weather_state = weather_map[st.session_state.weather_status]
+
+# -----------------------------
+# Hero
+# -----------------------------
 st.html("""
 <div class="hero">
     <div class="hero-kicker">Elite Officiating Operations Platform</div>
@@ -509,58 +571,58 @@ st.html("""
         <div class="hero-live">● LIVE GAME DAY MODE</div>
     </div>
     <p>
-        Professional game-day support for serious baseball umpires — rules, crew tools,
-        assignment visibility, safety workflows, crew communication, and certification tracking
-        in one polished command center.
+        Professional game-day support for serious baseball umpires — plate meeting readiness,
+        live crew coordination, weather awareness, rules support, safety workflows, and clean
+        game management in one polished command center.
     </p>
     <div class="hero-badges">
         <div class="hero-badge">NFHS / NCAA / OBR Ready</div>
-        <div class="hero-badge">Live Crew Coordination</div>
-        <div class="hero-badge">Incident & Safety Workflows</div>
-        <div class="hero-badge">Association-Scale Ready</div>
+        <div class="hero-badge">Game Check-In</div>
+        <div class="hero-badge">Weather + Lightning Workflow</div>
+        <div class="hero-badge">Live Game Clock</div>
     </div>
 </div>
 """)
 
-# OPS STRIP
-st.html("""
-<div class="ops-strip">
-    <div class="ops-pill">
-        <div class="ops-k">Assignment</div>
-        <div class="ops-v gold">Varsity HS • 4:00 PM</div>
+# -----------------------------
+# Compact command strip
+# -----------------------------
+st.html(f"""
+<div class="command-strip">
+    <div class="command-pill">
+        <div class="command-k">Assignment</div>
+        <div class="command-v gold">{assignment} • 4:00 PM</div>
     </div>
-    <div class="ops-pill">
-        <div class="ops-k">Site</div>
-        <div class="ops-v">Field 7 • Saratoga Springs</div>
+    <div class="command-pill">
+        <div class="command-k">Site</div>
+        <div class="command-v">{game_site}</div>
     </div>
-    <div class="ops-pill">
-        <div class="ops-k">Partner Status</div>
-        <div class="ops-v green">ETA 6 Minutes</div>
+    <div class="command-pill">
+        <div class="command-k">Partner</div>
+        <div class="command-v green">ETA {partner_eta}</div>
     </div>
-    <div class="ops-pill">
-        <div class="ops-k">Weather</div>
-        <div class="ops-v blue">68°F • Clear • No Lightning</div>
-    </div>
-    <div class="ops-pill">
-        <div class="ops-k">Ruleset</div>
-        <div class="ops-v">NFHS Loaded</div>
+    <div class="command-pill">
+        <div class="command-k">Weather / Ruleset</div>
+        <div class="command-v blue">{weather_temp} • {weather_summary} • NFHS</div>
     </div>
 </div>
 """)
 
-# CONTINUOUS TICKER
-ticker_content = """
-<span class="ticker-item">🚨 2026 NFHS Rule Update: New obstruction clarification in effect</span>
+# -----------------------------
+# Ticker
+# -----------------------------
+ticker_content = f"""
+<span class="ticker-item">📍 Assignment loaded: {assignment} at 4:00 PM</span>
 <span class="ticker-sep">•</span>
-<span class="ticker-item">📅 Annual mechanics clinic this Saturday at 9:00 AM</span>
+<span class="ticker-item">🧢 Plate meeting target: {format_dt(plate_meeting_time)}</span>
 <span class="ticker-sep">•</span>
-<span class="ticker-item">🌤️ Tonight’s slate: clear skies, low lightning risk across local fields</span>
+<span class="ticker-item">🌤️ Weather: {weather_temp} • {weather_summary} • {lightning_risk}</span>
 <span class="ticker-sep">•</span>
-<span class="ticker-item">✅ 14 umpires completed annual certification this week</span>
+<span class="ticker-item">✅ Crew status: partner ETA {partner_eta}</span>
 <span class="ticker-sep">•</span>
-<span class="ticker-item">💡 Pregame point of emphasis: trapped-ball communication and rotations</span>
+<span class="ticker-item">📖 Ruleset loaded: {ruleset}</span>
 <span class="ticker-sep">•</span>
-<span class="ticker-item">🧭 Crew arrival window active: parking side confirmed for Field 7</span>
+<span class="ticker-item">🚨 Safety workflows armed and ready</span>
 <span class="ticker-sep">•</span>
 """
 
@@ -569,61 +631,138 @@ st.html(f"""
     <div class="ticker-label"><span class="ticker-label-dot"></span> Live Feed</div>
     <div class="ticker-window">
         <div class="ticker-track">
-            <div class="ticker-content">
-                {ticker_content}
-            </div>
-            <div class="ticker-content">
-                {ticker_content}
-            </div>
+            <div class="ticker-content">{ticker_content}</div>
+            <div class="ticker-content">{ticker_content}</div>
         </div>
     </div>
 </div>
 """)
 
-# TOP STATUS ROW
-col1, col2, col3, col4 = st.columns(4)
+# -----------------------------
+# Top row: Plate Meeting / Weather / Game Clock
+# -----------------------------
+top1, top2, top3 = st.columns(3)
 
-with col1:
-    st.html("""
-    <div class="uc-card">
-        <div class="uc-label">Today's Assignment</div>
-        <div class="uc-value">Varsity High School • 4:00 PM</div>
-        <div class="uc-sub">Field 7 • Plate meeting in 42 minutes</div>
-        <div class="uc-status">Ready for first pitch</div>
+with top1:
+    st.markdown(f"""
+    <div class="panel">
+        <div class="panel-title">Plate Meeting + Check-In</div>
+        <div class="panel-big">{assignment} • 4:00 PM</div>
+        <div class="panel-sub">{game_site}</div>
+        <div class="panel-sub">Plate Meeting: {format_dt(plate_meeting_time)} • First Pitch: {format_dt(game_time)}</div>
+        <div class="status-pill">Meeting in {format_td(plate_meeting_countdown)}</div>
     </div>
-    """)
+    """, unsafe_allow_html=True)
 
-with col2:
-    st.html("""
-    <div class="uc-card">
-        <div class="uc-label">Crew Partner</div>
-        <div class="uc-value">ETA 6 Minutes 🟢</div>
-        <div class="uc-sub">Route active • parking side confirmed</div>
-        <div class="uc-status">Crew arrival on pace</div>
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("✅ Check In", use_container_width=True):
+            st.session_state.checked_in = True
+            st.session_state.check_in_time = datetime.now()
+    with c2:
+        if st.button("📍 Navigate", use_container_width=True):
+            st.info("Opening exact field pin with preferred parking approach.")
+
+    if st.session_state.checked_in:
+        st.success(f"Checked in at {format_dt(st.session_state.check_in_time)}. Admin can now see arrival status.")
+    else:
+        st.info("Not checked in yet. Tap check-in on arrival so admin sees live status.")
+
+with top2:
+    st.markdown(f"""
+    <div class="panel">
+        <div class="panel-title">Live Weather Alert</div>
+        <div class="panel-big">{weather_temp} • {weather_summary}</div>
+        <div class="panel-sub">Radar-ready status tile for lightning and delay workflows.</div>
+        <div class="{weather_state['pill_class']}">{weather_state['pill_text']}</div>
     </div>
-    """)
+    """, unsafe_allow_html=True)
 
-with col3:
-    st.html("""
-    <div class="uc-card">
-        <div class="uc-label">Weather Window</div>
-        <div class="uc-value">68°F • Clear</div>
-        <div class="uc-sub">No lightning concern at first pitch</div>
-        <div class="uc-status">Playable conditions</div>
+    w1, w2, w3 = st.columns(3)
+    with w1:
+        if st.button("Clear", key="weather_clear", use_container_width=True):
+            st.session_state.weather_status = "clear"
+    with w2:
+        if st.button("Caution", key="weather_caution", use_container_width=True):
+            st.session_state.weather_status = "caution"
+    with w3:
+        if st.button("Lightning", key="weather_lightning", use_container_width=True):
+            st.session_state.weather_status = "lightning"
+
+    getattr(st, weather_map[st.session_state.weather_status]["alert_func"])(
+        weather_map[st.session_state.weather_status]["alert_text"]
+    )
+    st.caption("Tonight’s prototype uses manual weather modes. Next step: hook to a live radar/weather API and trigger automated alerts.")
+
+with top3:
+    selected_limit = st.selectbox(
+        "Game Time Limit",
+        ["1:45", "2:00", "2:10"],
+        index=1,
+        key="game_limit"
+    )
+
+    limits = {
+        "1:45": 105,
+        "2:00": 120,
+        "2:10": 130
+    }
+    selected_minutes = limits[selected_limit]
+
+    st.markdown("""
+    <div class="panel">
+        <div class="panel-title">Game Clock</div>
+        <div class="panel-big">Start on First Pitch</div>
+        <div class="panel-sub">Track elapsed game time and know when you’re nearing the cap.</div>
     </div>
-    """)
+    """, unsafe_allow_html=True)
 
-with col4:
-    st.html("""
-    <div class="uc-card">
-        <div class="uc-label">Ruleset Loaded</div>
-        <div class="uc-value">NFHS Varsity Profile</div>
-        <div class="uc-sub">Context-aware rule support active</div>
-        <div class="uc-status">Rule engine armed</div>
-    </div>
-    """)
+    gc1, gc2 = st.columns(2)
+    with gc1:
+        if st.button("⏱️ Start Game", use_container_width=True):
+            st.session_state.game_started = True
+            st.session_state.first_pitch_time = datetime.now()
+    with gc2:
+        if st.button("↺ Reset Clock", use_container_width=True):
+            st.session_state.game_started = False
+            st.session_state.first_pitch_time = None
 
-st.markdown("")
+    if st.session_state.game_started and st.session_state.first_pitch_time:
+        elapsed = datetime.now() - st.session_state.first_pitch_time
+        remaining = timedelta(minutes=selected_minutes) - elapsed
+        st.metric("Elapsed", format_td(elapsed))
+        st.metric("Remaining", format_td(remaining))
+        if remaining.total_seconds() <= 0:
+            st.error("Time limit reached.")
+        elif remaining.total_seconds() <= 900:
+            st.warning("Final 15 minutes of game limit.")
+        else:
+            st.success("Clock running inside time window.")
+        st.caption(f"First pitch logged at {format_dt(st.session_state.first_pitch_time)}")
+    else:
+        st.metric("Elapsed", "00:00")
+        st.metric("Remaining", f"{selected_minutes}:00")
+        st.info("Clock not started yet. Tap Start Game on first pitch.")
+
+# -----------------------------
+# Quick action row
+# -----------------------------
+st.markdown('<div class="quick-actions-wrap">', unsafe_allow_html=True)
+qa1, qa2, qa3 = st.columns(3)
+with qa1:
+    if st.button("📖 Instant Ruling", use_container_width=True):
+        st.toast("Rule Advisor is ready below.")
+with qa2:
+    if st.button("⚠️ Emergency Alert", use_container_width=True):
+        st.error("Emergency alert workflow triggered for assignor and safety contact.")
+with qa3:
+    if st.button("📝 Incident Report", use_container_width=True):
+        st.success("Incident report workflow opened.")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# -----------------------------
+# Tabs
+# -----------------------------
 tab1, tab2, tab3 = st.tabs(["📖 Rule Advisor", "⚾ Game Day Toolkit", "💬 Crew Chat & Tracker"])
 
 with tab1:
@@ -633,27 +772,27 @@ with tab1:
     left, right = st.columns([1.35, 1])
 
     with left:
-        st.markdown('<div class="panel-wrap">', unsafe_allow_html=True)
-
         situation = st.text_area(
             "Describe the play:",
             "Runner on first, ground ball to shortstop. Fielder obstructs the runner.",
-            height=145,
+            height=150,
             placeholder="Example: R1 stealing, throw from catcher pulls F6 into the baseline..."
         )
 
         if st.button("Get Exact Ruling", key="ruling_btn", use_container_width=True):
-            st.html("""
-            <div class="rule-box">
-                <strong>NFHS Rule 2-32 — Obstruction</strong><br><br>
-                Immediate dead ball on Type A obstruction when a play is being made on the obstructed runner.<br><br>
-                Award the obstructed runner at least one base beyond the base they would have reached without obstruction.<br>
-                Place all other runners accordingly.
+            st.markdown("""
+            <div class="panel" style="margin-top:10px;">
+                <div class="panel-title">Rule Result</div>
+                <div class="panel-big">NFHS Rule 2-32 — Obstruction</div>
+                <div class="panel-sub">
+                    Immediate dead ball on Type A obstruction when a play is being made on the obstructed runner.
+                    Award the obstructed runner at least one base beyond the base they would have reached without obstruction.
+                    Place all other runners accordingly.
+                </div>
+                <div class="status-pill">High-confidence ruling delivered</div>
             </div>
-            """)
+            """, unsafe_allow_html=True)
             st.success("Ruling returned fast — clean, clear, and field-usable.")
-
-        st.markdown('</div>', unsafe_allow_html=True)
 
     with right:
         st.metric("Most Common Call Tonight", "Obstruction / Interference")
@@ -666,22 +805,22 @@ with tab2:
 
     top_a, top_b, top_c = st.columns(3)
     with top_a:
-        if st.button("📍 Navigate to Field", use_container_width=True):
+        if st.button("📍 Open Field Navigation", use_container_width=True):
             st.info("Opening exact field pin with preferred parking approach.")
     with top_b:
-        if st.button("📝 Generate Incident Report", use_container_width=True):
-            st.success("Professional incident report created and ready for review.")
-    with top_c:
         if st.button("🔄 Find Replacement Umpire", use_container_width=True):
             st.info("Nearest qualified official pinged. Assignor copied.")
-
-    danger_a, danger_b = st.columns(2)
-    with danger_a:
-        if st.button("🚨 Emergency Alert", use_container_width=True):
-            st.error("Immediate alert sent to Assignor, Safety Contact, and emergency workflow.")
-    with danger_b:
+    with top_c:
         if st.button("📞 Contact Crew Chief", use_container_width=True):
             st.success("Crew communication lane opened.")
+
+    d1, d2 = st.columns(2)
+    with d1:
+        if st.button("🚨 Trigger Emergency Workflow", use_container_width=True):
+            st.error("Immediate alert sent to assignor, safety contact, and emergency workflow.")
+    with d2:
+        if st.button("🧾 Generate Incident Report", use_container_width=True):
+            st.success("Professional incident report created and ready for review.")
 
     st.markdown("")
     st.subheader("Live Game Counter")
@@ -691,7 +830,7 @@ with tab2:
     g3.metric("Outs", "0")
     g4.metric("Pitch Count", "47")
 
-    st.caption("Designed to evolve into a larger tap-friendly field view for fast game use on mobile.")
+    st.caption("This section can later become a larger one-tap mobile field view for quick use between pitches.")
 
 with tab3:
     st.subheader("Private Crew Chat")
@@ -714,35 +853,45 @@ with tab3:
     if st.button("Add Score / Mark Attendance", use_container_width=True):
         st.toast("Certification record updated.")
 
+# -----------------------------
+# Sidebar
+# -----------------------------
 with st.sidebar:
     st.markdown("## UmpCompanion")
     st.caption("Game-day operations for working umpires and associations")
 
-    st.html("""
+    st.markdown("""
     <div class="sidebar-box">
-        <div class="sidebar-title">Crew Control Panel</div>
-        <div class="small-note">Fast access to rules support, safety workflows, communication, assignment operations, and live game status.</div>
-    </div>
-    """)
-
-    st.success("Live • Fast • Professional")
-    st.info(
-        "• Context-aware rule lookup\n"
-        "• One-tap safety & incident tools\n"
-        "• Replacement helper for assignors\n"
-        "• Private crew communication\n"
-        "• Certification tracking"
-    )
-
-    st.html("""
-    <div class="sidebar-box">
-        <div class="sidebar-title">Operational Add-Ons</div>
+        <div class="sidebar-title">Live Status</div>
         <div class="small-note">
-            GPS arrival check-in • crew availability board • live radar tile • lightning delay timer • digital lineup card • ejection log • association analytics
+            Assignment: Varsity HS • 4:00 PM<br>
+            Site: Field 7 • Saratoga Springs<br>
+            Ruleset: NFHS Varsity<br>
+            Check-In: READY
         </div>
     </div>
-    """)
+    """, unsafe_allow_html=True)
 
+    st.markdown("""
+    <div class="sidebar-box">
+        <div class="sidebar-title">Tonight's Demo Strengths</div>
+        <div class="small-note">
+            Plate meeting readiness • live check-in • weather alert workflow • game clock • context-aware rules • incident + emergency actions
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.info(
+        "• Context-aware rule lookup\n"
+        "• One-tap safety workflows\n"
+        "• Crew coordination tools\n"
+        "• Check-in visibility\n"
+        "• Game time tracking"
+    )
+
+# -----------------------------
+# Footer
+# -----------------------------
 st.html("""
 <div class="app-footer">
     UmpCompanion live prototype • game-day command center • built for serious baseball operations
