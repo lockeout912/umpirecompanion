@@ -33,6 +33,8 @@ if "rule_result_text" not in st.session_state:
     )
 if "active_panel" not in st.session_state:
     st.session_state.active_panel = "rules"
+if "game_limit" not in st.session_state:
+    st.session_state.game_limit = "2:00"
 
 # -----------------------------
 # Static demo values
@@ -84,7 +86,7 @@ limits = {
     "2:00": 120,
     "2:10": 130
 }
-selected_limit = st.session_state.get("game_limit", "2:00")
+selected_limit = st.session_state["game_limit"]
 selected_minutes = limits[selected_limit]
 
 def get_plate_status(td):
@@ -92,7 +94,7 @@ def get_plate_status(td):
     if secs > 900:
         return ("On Track", "status-pill")
     elif secs > 0:
-        return ("Late Risk", "status-pill warn")
+        return ("Due Soon", "status-pill warn")
     else:
         return ("Past Due", "status-pill alert")
 
@@ -190,7 +192,7 @@ st.markdown("""
     position: relative;
     z-index: 1;
     max-width: 1460px;
-    padding-top: 0.55rem;
+    padding-top: 0.5rem;
     padding-bottom: 2rem;
 }
 
@@ -269,7 +271,7 @@ p, div, span, label {
 /* Top snapshot */
 .snapshot-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(7, 1fr);
     gap: 9px;
     margin-bottom: 10px;
 }
@@ -307,10 +309,13 @@ p, div, span, label {
     font-weight: 900;
     margin: 2px 0 8px 0;
 }
+.control-row {
+    margin-bottom: 6px;
+}
 .control-row .stButton > button {
-    min-height: 48px !important;
-    padding: .55rem .75rem !important;
-    font-size: .93rem !important;
+    min-height: 46px !important;
+    padding: .52rem .72rem !important;
+    font-size: .90rem !important;
     border-radius: 14px !important;
     background: linear-gradient(180deg, #235C97, #173F6A) !important;
     box-shadow: 0 6px 18px rgba(0,0,0,.22) !important;
@@ -362,7 +367,7 @@ p, div, span, label {
     display: flex;
     width: max-content;
     white-space: nowrap;
-    animation: ticker-scroll 88s linear infinite;
+    animation: ticker-scroll 78s linear infinite;
     will-change: transform;
 }
 .ticker-content {
@@ -518,7 +523,12 @@ section[data-testid="stSidebar"] {
     text-align: center;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
+    .snapshot-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+@media (max-width: 850px) {
     .snapshot-grid {
         grid-template-columns: repeat(3, 1fr);
     }
@@ -531,8 +541,8 @@ section[data-testid="stSidebar"] {
         grid-template-columns: repeat(2, 1fr);
     }
     .control-row .stButton > button {
-        min-height: 44px !important;
-        font-size: .88rem !important;
+        min-height: 42px !important;
+        font-size: .86rem !important;
     }
 }
 </style>
@@ -591,6 +601,10 @@ st.markdown(f"""
         <div class="snap-k">Check-In</div>
         <div class="snap-v">{check_in_text}</div>
     </div>
+    <div class="snap">
+        <div class="snap-k">Plate Conf.</div>
+        <div class="snap-v gold">{format_td(plate_meeting_countdown)}</div>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -600,26 +614,33 @@ st.markdown(f"""
 st.markdown('<div class="control-center-title">Control Center</div>', unsafe_allow_html=True)
 
 st.markdown('<div class="control-row">', unsafe_allow_html=True)
-c1, c2, c3, c4, c5, c6 = st.columns(6)
-with c1:
-    if st.button("📖 Rules", key="panel_rules", use_container_width=True):
-        st.session_state.active_panel = "rules"
-with c2:
+r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+with r1c1:
     if st.button("✅ Check In", key="panel_checkin", use_container_width=True):
         st.session_state.checked_in = True
         st.session_state.check_in_time = datetime.now()
-with c3:
-    if st.button("📍 Navigate", key="panel_nav", use_container_width=True):
-        st.info("Opening exact field pin with preferred parking approach.")
-with c4:
+with r1c2:
+    if st.button("📖 Rules", key="panel_rules", use_container_width=True):
+        st.session_state.active_panel = "rules"
+with r1c3:
     if st.button("⏱ Clock", key="panel_clock", use_container_width=True):
         st.session_state.active_panel = "clock"
-with c5:
+with r1c4:
     if st.button("🌩 Weather", key="panel_weather", use_container_width=True):
         st.session_state.active_panel = "weather"
-with c6:
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="control-row">', unsafe_allow_html=True)
+r2c1, r2c2, r2c3 = st.columns(3)
+with r2c1:
     if st.button("🚨 Emergency", key="panel_emergency", use_container_width=True):
         st.session_state.active_panel = "emergency"
+with r2c2:
+    if st.button("🔄 Find Sub", key="panel_sub", use_container_width=True):
+        st.session_state.active_panel = "sub"
+with r2c3:
+    if st.button("📍 Navigate", key="panel_nav", use_container_width=True):
+        st.session_state.active_panel = "nav"
 st.markdown('</div>', unsafe_allow_html=True)
 
 # -----------------------------
@@ -813,6 +834,36 @@ with right:
 
         if st.button("📞 Contact Crew Chief", key="emergency_crew", use_container_width=True):
             st.success("Crew communication lane opened.")
+
+    elif active_panel == "sub":
+        st.markdown("""
+        <div class="panel">
+            <div class="panel-title">Substitute Coverage</div>
+            <div class="panel-big">Find Replacement Umpire</div>
+            <div class="panel-sub">Surface nearest qualified replacement options and notify the assignor workflow.</div>
+            <div class="status-pill warn">Coverage support ready</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("🔄 Scan Nearest Available", key="sub_scan", use_container_width=True):
+            st.info("Nearest qualified official 4.2 miles away notified. Assignor copied.")
+        if st.button("📤 Notify Assignor of Coverage Risk", key="sub_notify", use_container_width=True):
+            st.warning("Coverage risk notification sent to assignor workflow.")
+
+    elif active_panel == "nav":
+        st.markdown(f"""
+        <div class="panel">
+            <div class="panel-title">Navigation + Arrival</div>
+            <div class="panel-big">{game_site}</div>
+            <div class="panel-sub">Fast route access plus arrival workflow support for game-day operations.</div>
+            <div class="status-pill">Route tools ready</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("📍 Open Field Navigation", key="nav_open", use_container_width=True):
+            st.info("Opening exact field pin with preferred parking approach.")
+        if st.button("🧭 View Arrival Notes", key="nav_notes", use_container_width=True):
+            st.success("Arrival note: park behind first-base side concessions and walk to plate area.")
 
     else:
         st.markdown("""
