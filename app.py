@@ -31,6 +31,8 @@ if "rule_result_text" not in st.session_state:
         "Award the obstructed runner at least one base beyond the base they would have reached without obstruction. "
         "Place all other runners accordingly."
     )
+if "active_panel" not in st.session_state:
+    st.session_state.active_panel = "rules"
 
 # -----------------------------
 # Static demo values
@@ -46,12 +48,16 @@ weather_summary = "Clear"
 lightning_risk = "No Lightning"
 crew_status = "Partner on pace"
 
+org_message = "SBUO Reminder: polish shoes, clean hat, sharp plate conference presence."
+nfhs_update = "NFHS Point of Emphasis: obstruction and slide rule communication."
+
 # Demo game time set for today at 4:00 PM
 game_time = current_time.replace(hour=16, minute=0, second=0, microsecond=0)
 if current_time.hour >= 18:
     game_time = game_time + timedelta(days=1)
 
-plate_meeting_time = game_time - timedelta(minutes=15)
+# Plate conference should be 5 minutes before game
+plate_meeting_time = game_time - timedelta(minutes=5)
 
 # -----------------------------
 # Helpers
@@ -80,6 +86,17 @@ limits = {
 }
 selected_limit = st.session_state.get("game_limit", "2:00")
 selected_minutes = limits[selected_limit]
+
+def get_plate_status(td):
+    secs = td.total_seconds()
+    if secs > 900:
+        return ("On Track", "status-pill")
+    elif secs > 0:
+        return ("Late Risk", "status-pill warn")
+    else:
+        return ("Past Due", "status-pill alert")
+
+plate_status_text, plate_status_class = get_plate_status(plate_meeting_countdown)
 
 # -----------------------------
 # Weather state
@@ -112,7 +129,7 @@ weather_state = weather_map[st.session_state.weather_status]
 # -----------------------------
 # CSS
 # -----------------------------
-st.html("""
+st.markdown("""
 <style>
 :root {
     --navy: #06101A;
@@ -173,7 +190,7 @@ st.html("""
     position: relative;
     z-index: 1;
     max-width: 1460px;
-    padding-top: 0.65rem;
+    padding-top: 0.55rem;
     padding-bottom: 2rem;
 }
 
@@ -193,10 +210,10 @@ p, div, span, label {
         linear-gradient(135deg, rgba(255,255,255,.05), rgba(255,255,255,.01)),
         linear-gradient(115deg, #0A1726 0%, #102338 50%, #16395E 78%, #19334F 100%);
     border: 1px solid rgba(255,255,255,.09);
-    border-radius: 22px;
-    padding: 16px 18px 15px 18px;
+    border-radius: 20px;
+    padding: 14px 18px 13px 18px;
     box-shadow: var(--shadow);
-    margin-bottom: 12px;
+    margin-bottom: 10px;
 }
 .header-shell::before {
     content: "";
@@ -216,20 +233,20 @@ p, div, span, label {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 14px;
+    gap: 12px;
     flex-wrap: wrap;
 }
 .header-kicker {
     color: #C7D6E8;
-    font-size: .68rem;
+    font-size: .66rem;
     text-transform: uppercase;
     letter-spacing: .18em;
     font-weight: 900;
-    margin-bottom: 6px;
+    margin-bottom: 5px;
 }
 .header-title {
     margin: 0;
-    font-size: 1.9rem;
+    font-size: 1.72rem;
     font-weight: 900;
     line-height: 1.02;
 }
@@ -238,39 +255,137 @@ p, div, span, label {
     border: 1px solid rgba(255,255,255,.12);
     color: #FFF4D6;
     border-radius: 999px;
-    padding: 8px 13px;
+    padding: 7px 12px;
     font-weight: 900;
-    font-size: .80rem;
+    font-size: .76rem;
     box-shadow: var(--glow-gold);
 }
 .header-sub {
-    margin-top: 8px;
+    margin-top: 7px;
     color: #D9E4F0;
-    font-size: .96rem;
+    font-size: .92rem;
 }
 
-/* Action deck */
-.deck-shell {
-    margin: 8px 0 14px 0;
+/* Top snapshot */
+.snapshot-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 9px;
+    margin-bottom: 10px;
 }
-.deck-title {
+.snap {
+    background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
+    border: 1px solid var(--line);
+    border-radius: 15px;
+    padding: 11px 12px;
+    box-shadow: var(--shadow-soft);
+}
+.snap-k {
+    color: #AFC0D3;
+    text-transform: uppercase;
+    letter-spacing: .13em;
+    font-size: .62rem;
+    font-weight: 900;
+    margin-bottom: 5px;
+}
+.snap-v {
+    color: #FFF;
+    font-size: .95rem;
+    font-weight: 900;
+    line-height: 1.15;
+}
+.snap-v.green { color: #94F0BD; }
+.snap-v.blue { color: #A5D2FF; }
+.snap-v.gold { color: #FFD981; }
+
+/* Control center */
+.control-center-title {
     color: #AFC0D3;
     text-transform: uppercase;
     letter-spacing: .16em;
-    font-size: .68rem;
+    font-size: .66rem;
     font-weight: 900;
-    margin-bottom: 8px;
+    margin: 2px 0 8px 0;
 }
-.deck-actions .stButton > button {
-    min-height: 62px;
-    font-size: 1.02rem;
+.control-row .stButton > button {
+    min-height: 48px !important;
+    padding: .55rem .75rem !important;
+    font-size: .93rem !important;
+    border-radius: 14px !important;
+    background: linear-gradient(180deg, #235C97, #173F6A) !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,.22) !important;
 }
-.primary-row .stButton > button {
-    background: linear-gradient(180deg, #2A6AB0, #194B7E);
-    box-shadow: var(--glow-blue);
+.control-row .stButton > button:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
 }
-.alert-row .stButton > button {
-    background: linear-gradient(180deg, #2A6AB0, #194B7E);
+
+/* Banner */
+.ticker-shell {
+    margin: 10px 0 12px 0;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,.09);
+    background:
+        linear-gradient(90deg, rgba(17,36,58,.96), rgba(21,45,74,.98) 45%, rgba(16,37,60,.96));
+    box-shadow: var(--shadow-soft);
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: stretch;
+}
+.ticker-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(180deg, #B85E2F, #8F431D);
+    color: white;
+    font-weight: 900;
+    padding: 0 16px;
+    letter-spacing: .08em;
+    font-size: .76rem;
+    text-transform: uppercase;
+    white-space: nowrap;
+    border-right: 1px solid rgba(255,255,255,.08);
+}
+.ticker-label-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #FFD981;
+    box-shadow: 0 0 12px rgba(255,217,129,.7);
+}
+.ticker-window {
+    overflow: hidden;
+    position: relative;
+}
+.ticker-track {
+    display: flex;
+    width: max-content;
+    white-space: nowrap;
+    animation: ticker-scroll 88s linear infinite;
+    will-change: transform;
+}
+.ticker-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    padding: 12px 0;
+}
+.ticker-item {
+    color: #F8FBFF;
+    font-weight: 800;
+    font-size: .90rem;
+    letter-spacing: .01em;
+}
+.ticker-sep {
+    color: #8EC2FF;
+    opacity: .95;
+    padding: 0 18px;
+    font-weight: 900;
+}
+@keyframes ticker-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
 }
 
 /* Cards / panels */
@@ -297,27 +412,27 @@ p, div, span, label {
     color: var(--muted);
     text-transform: uppercase;
     letter-spacing: .16em;
-    font-size: .68rem;
+    font-size: .66rem;
     font-weight: 900;
-    margin-bottom: 9px;
+    margin-bottom: 8px;
 }
 .panel-big {
     color: white;
-    font-size: 1.18rem;
+    font-size: 1.15rem;
     font-weight: 900;
     line-height: 1.15;
 }
 .panel-sub {
     color: #C9D8E8;
-    font-size: .92rem;
-    margin-top: 7px;
+    font-size: .91rem;
+    margin-top: 6px;
 }
 .status-pill {
     display: inline-block;
     margin-top: 10px;
     padding: 7px 12px;
     border-radius: 999px;
-    font-size: .76rem;
+    font-size: .75rem;
     font-weight: 900;
     background: rgba(39,193,116,.13);
     color: var(--green-3);
@@ -336,37 +451,6 @@ p, div, span, label {
     border: 1px solid rgba(216,53,53,.34);
 }
 
-.snapshot-grid {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 10px;
-    margin-bottom: 14px;
-}
-.snap {
-    background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 12px 13px;
-    box-shadow: var(--shadow-soft);
-}
-.snap-k {
-    color: #AFC0D3;
-    text-transform: uppercase;
-    letter-spacing: .13em;
-    font-size: .64rem;
-    font-weight: 900;
-    margin-bottom: 5px;
-}
-.snap-v {
-    color: #FFF;
-    font-size: .98rem;
-    font-weight: 900;
-    line-height: 1.15;
-}
-.snap-v.green { color: #94F0BD; }
-.snap-v.blue { color: #A5D2FF; }
-.snap-v.gold { color: #FFD981; }
-
 /* Inputs and buttons */
 textarea, input, select {
     border-radius: 14px !important;
@@ -381,18 +465,18 @@ div[data-baseweb="select"] > div {
 
 .stButton > button {
     width: 100%;
-    border-radius: 999px;
-    padding: 0.90rem 1rem;
+    border-radius: 14px;
+    padding: .72rem .9rem;
     font-weight: 900;
     letter-spacing: 0.01em;
     border: 1px solid rgba(255,255,255,.08);
     transition: all .18s ease;
-    box-shadow: 0 8px 22px rgba(0,0,0,.24);
+    box-shadow: 0 8px 22px rgba(0,0,0,.22);
     background: linear-gradient(180deg, #215794, #173F6A);
     color: white;
 }
 .stButton > button:hover {
-    transform: translateY(-2px);
+    transform: translateY(-1px);
     filter: brightness(1.05);
 }
 
@@ -409,7 +493,7 @@ div[data-testid="stMetricLabel"] {
     color: #B4C5D7 !important;
     text-transform: uppercase;
     letter-spacing: .12em;
-    font-size: .68rem !important;
+    font-size: .66rem !important;
     font-weight: 800 !important;
 }
 div[data-testid="stMetricValue"] {
@@ -428,9 +512,9 @@ section[data-testid="stSidebar"] {
 }
 
 .footer-note {
-    margin-top: 20px;
+    margin-top: 18px;
     color: #A9B9CA;
-    font-size: .86rem;
+    font-size: .84rem;
     text-align: center;
 }
 
@@ -441,23 +525,23 @@ section[data-testid="stSidebar"] {
 }
 @media (max-width: 700px) {
     .header-title {
-        font-size: 1.6rem;
+        font-size: 1.45rem;
     }
     .snapshot-grid {
         grid-template-columns: repeat(2, 1fr);
     }
-    .deck-actions .stButton > button {
-        min-height: 58px;
-        font-size: .96rem;
+    .control-row .stButton > button {
+        min-height: 44px !important;
+        font-size: .88rem !important;
     }
 }
 </style>
-""")
+""", unsafe_allow_html=True)
 
 # -----------------------------
 # Header
 # -----------------------------
-st.html(f"""
+st.markdown(f"""
 <div class="header-shell">
     <div class="header-kicker">Game Day Command Center</div>
     <div class="header-top">
@@ -470,49 +554,10 @@ st.html(f"""
         {assignment} • {game_site} • Partner ETA {partner_eta} • First Pitch {format_dt(game_time)}
     </div>
 </div>
-""")
+""", unsafe_allow_html=True)
 
 # -----------------------------
-# Rapid Action Deck
-# -----------------------------
-st.markdown('<div class="deck-shell"><div class="deck-title">Rapid Action Deck</div></div>', unsafe_allow_html=True)
-
-st.markdown('<div class="deck-actions primary-row">', unsafe_allow_html=True)
-r1c1, r1c2, r1c3, r1c4 = st.columns(4)
-with r1c1:
-    if st.button("✅ Check In", use_container_width=True, key="top_checkin"):
-        st.session_state.checked_in = True
-        st.session_state.check_in_time = datetime.now()
-with r1c2:
-    if st.button("📍 Navigate", use_container_width=True, key="top_nav"):
-        st.info("Opening exact field pin with preferred parking approach.")
-with r1c3:
-    if st.button("⏱ Start Game", use_container_width=True, key="top_start"):
-        st.session_state.game_started = True
-        st.session_state.first_pitch_time = datetime.now()
-with r1c4:
-    if st.button("⚡ Weather Alert", use_container_width=True, key="top_weather"):
-        st.warning("Weather controls are active below. Use Clear / Caution / Lightning.")
-st.markdown('</div>', unsafe_allow_html=True)
-
-st.markdown('<div class="deck-actions alert-row">', unsafe_allow_html=True)
-r2c1, r2c2, r2c3, r2c4 = st.columns(4)
-with r2c1:
-    if st.button("📖 Rule Lookup", use_container_width=True, key="top_rule"):
-        st.toast("Rule lookup is ready below.")
-with r2c2:
-    if st.button("🚨 Emergency", use_container_width=True, key="top_emergency"):
-        st.error("Emergency alert workflow triggered for assignor and safety contact.")
-with r2c3:
-    if st.button("📝 Incident", use_container_width=True, key="top_incident"):
-        st.success("Incident report workflow opened.")
-with r2c4:
-    if st.button("📞 Crew Chief", use_container_width=True, key="top_crewchief"):
-        st.success("Crew communication lane opened.")
-st.markdown('</div>', unsafe_allow_html=True)
-
-# -----------------------------
-# Snapshot Grid
+# Top snapshot
 # -----------------------------
 check_in_text = (
     f"Checked in {format_dt(st.session_state.check_in_time)}"
@@ -520,7 +565,7 @@ check_in_text = (
     else "Not checked in"
 )
 
-st.html(f"""
+st.markdown(f"""
 <div class="snapshot-grid">
     <div class="snap">
         <div class="snap-k">Assignment</div>
@@ -547,21 +592,77 @@ st.html(f"""
         <div class="snap-v">{check_in_text}</div>
     </div>
 </div>
-""")
+""", unsafe_allow_html=True)
 
 # -----------------------------
-# Main operational row
+# Compact control center
 # -----------------------------
-left, right = st.columns([1.25, 1])
+st.markdown('<div class="control-center-title">Control Center</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="control-row">', unsafe_allow_html=True)
+c1, c2, c3, c4, c5, c6 = st.columns(6)
+with c1:
+    if st.button("📖 Rules", key="panel_rules", use_container_width=True):
+        st.session_state.active_panel = "rules"
+with c2:
+    if st.button("✅ Check In", key="panel_checkin", use_container_width=True):
+        st.session_state.checked_in = True
+        st.session_state.check_in_time = datetime.now()
+with c3:
+    if st.button("📍 Navigate", key="panel_nav", use_container_width=True):
+        st.info("Opening exact field pin with preferred parking approach.")
+with c4:
+    if st.button("⏱ Clock", key="panel_clock", use_container_width=True):
+        st.session_state.active_panel = "clock"
+with c5:
+    if st.button("🌩 Weather", key="panel_weather", use_container_width=True):
+        st.session_state.active_panel = "weather"
+with c6:
+    if st.button("🚨 Emergency", key="panel_emergency", use_container_width=True):
+        st.session_state.active_panel = "emergency"
+st.markdown('</div>', unsafe_allow_html=True)
+
+# -----------------------------
+# Live organization banner
+# -----------------------------
+ticker_content = f"""
+<span class="ticker-item">🌤 Current Weather: {weather_temp} • {weather_summary} • {lightning_risk}</span>
+<span class="ticker-sep">•</span>
+<span class="ticker-item">📣 {org_message}</span>
+<span class="ticker-sep">•</span>
+<span class="ticker-item">📖 NFHS Update: {nfhs_update}</span>
+<span class="ticker-sep">•</span>
+<span class="ticker-item">🧢 Plate Conference Target: {format_dt(plate_meeting_time)}</span>
+<span class="ticker-sep">•</span>
+<span class="ticker-item">✅ Crew Status: {crew_status}</span>
+<span class="ticker-sep">•</span>
+"""
+
+st.markdown(f"""
+<div class="ticker-shell">
+    <div class="ticker-label"><span class="ticker-label-dot"></span> Live Feed</div>
+    <div class="ticker-window">
+        <div class="ticker-track">
+            <div class="ticker-content">{ticker_content}</div>
+            <div class="ticker-content">{ticker_content}</div>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# -----------------------------
+# Accountability + active panel row
+# -----------------------------
+left, right = st.columns([1.12, 1])
 
 with left:
     st.markdown(f"""
     <div class="panel">
-        <div class="panel-title">Plate Meeting + Arrival</div>
+        <div class="panel-title">Assignment Accountability</div>
         <div class="panel-big">{assignment} • {format_dt(game_time)}</div>
         <div class="panel-sub">{game_site}</div>
-        <div class="panel-sub">Plate Meeting: {format_dt(plate_meeting_time)} • First Pitch: {format_dt(game_time)}</div>
-        <div class="status-pill">Meeting in {format_td(plate_meeting_countdown)}</div>
+        <div class="panel-sub">Plate Conference: {format_dt(plate_meeting_time)} • First Pitch: {format_dt(game_time)}</div>
+        <div class="{plate_status_class}">{plate_status_text} • Conference in {format_td(plate_meeting_countdown)}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -574,11 +675,12 @@ with left:
     situation = st.text_area(
         "Describe the play:",
         "Runner on first, ground ball to shortstop. Fielder obstructs the runner.",
-        height=140,
+        height=130,
         placeholder="Example: R1 stealing, throw from catcher pulls F6 into the baseline..."
     )
 
     if st.button("Get Exact Ruling", key="ruling_btn", use_container_width=True):
+        st.session_state.active_panel = "rules"
         st.session_state.rule_result_visible = True
         st.session_state.rule_result_title = "NFHS Rule 2-32 — Obstruction"
         st.session_state.rule_result_text = (
@@ -598,91 +700,137 @@ with left:
         """, unsafe_allow_html=True)
 
 with right:
-    st.markdown(f"""
-    <div class="panel">
-        <div class="panel-title">Live Weather Alert</div>
-        <div class="panel-big">{weather_temp} • {weather_summary}</div>
-        <div class="panel-sub">Radar-ready tile for lightning and weather delay workflows.</div>
-        <div class="{weather_state['pill_class']}">{weather_state['pill_text']}</div>
-    </div>
-    """, unsafe_allow_html=True)
+    active_panel = st.session_state.active_panel
 
-    wc1, wc2, wc3 = st.columns(3)
-    with wc1:
-        if st.button("Clear", key="weather_clear", use_container_width=True):
-            st.session_state.weather_status = "clear"
-    with wc2:
-        if st.button("Caution", key="weather_caution", use_container_width=True):
-            st.session_state.weather_status = "caution"
-    with wc3:
-        if st.button("Lightning", key="weather_lightning", use_container_width=True):
-            st.session_state.weather_status = "lightning"
+    if active_panel == "weather":
+        st.markdown(f"""
+        <div class="panel">
+            <div class="panel-title">Live Weather Alert</div>
+            <div class="panel-big">{weather_temp} • {weather_summary}</div>
+            <div class="panel-sub">Radar-ready tile for lightning and delay workflows.</div>
+            <div class="{weather_state['pill_class']}">{weather_state['pill_text']}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    weather_state = weather_map[st.session_state.weather_status]
-    getattr(st, weather_state["alert_func"])(weather_state["alert_text"])
+        wc1, wc2, wc3 = st.columns(3)
+        with wc1:
+            if st.button("Clear", key="weather_clear", use_container_width=True):
+                st.session_state.weather_status = "clear"
+        with wc2:
+            if st.button("Caution", key="weather_caution", use_container_width=True):
+                st.session_state.weather_status = "caution"
+        with wc3:
+            if st.button("Lightning", key="weather_lightning", use_container_width=True):
+                st.session_state.weather_status = "lightning"
 
-    st.selectbox(
-        "Game Time Limit",
-        ["1:45", "2:00", "2:10"],
-        index=["1:45", "2:00", "2:10"].index(selected_limit),
-        key="game_limit"
-    )
-    selected_limit = st.session_state["game_limit"]
-    selected_minutes = limits[selected_limit]
+        weather_state = weather_map[st.session_state.weather_status]
+        getattr(st, weather_state["alert_func"])(weather_state["alert_text"])
 
-    st.markdown("""
-    <div class="panel" style="margin-top:10px;">
-        <div class="panel-title">Game Clock</div>
-        <div class="panel-big">Start on First Pitch</div>
-        <div class="panel-sub">Track elapsed time and know when you’re nearing the cap.</div>
-    </div>
-    """, unsafe_allow_html=True)
+        st.caption("Prototype mode uses manual weather states. Next step is a live radar/weather API with automated alerting.")
 
-    gc1, gc2 = st.columns(2)
-    with gc1:
-        if st.button("⏱ Start Game", key="clock_start", use_container_width=True):
-            st.session_state.game_started = True
-            st.session_state.first_pitch_time = datetime.now()
-    with gc2:
-        if st.button("↺ Reset Clock", key="clock_reset", use_container_width=True):
-            st.session_state.game_started = False
-            st.session_state.first_pitch_time = None
+    elif active_panel == "clock":
+        st.selectbox(
+            "Game Time Limit",
+            ["1:45", "2:00", "2:10"],
+            index=["1:45", "2:00", "2:10"].index(selected_limit),
+            key="game_limit"
+        )
+        selected_limit = st.session_state["game_limit"]
+        selected_minutes = limits[selected_limit]
 
-    if st.session_state.game_started and st.session_state.first_pitch_time:
-        elapsed = datetime.now() - st.session_state.first_pitch_time
-        remaining = timedelta(minutes=selected_minutes) - elapsed
-        m1, m2 = st.columns(2)
-        with m1:
-            st.metric("Elapsed", format_td(elapsed))
-        with m2:
-            st.metric("Remaining", format_td(remaining))
+        st.markdown("""
+        <div class="panel">
+            <div class="panel-title">Game Clock</div>
+            <div class="panel-big">Start on First Pitch</div>
+            <div class="panel-sub">Track elapsed time and know when you’re nearing the cap.</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        if remaining.total_seconds() <= 0:
-            st.error("Time limit reached.")
-        elif remaining.total_seconds() <= 900:
-            st.warning("Final 15 minutes of game limit.")
+        gc1, gc2 = st.columns(2)
+        with gc1:
+            if st.button("⏱ Start Game", key="clock_start", use_container_width=True):
+                st.session_state.game_started = True
+                st.session_state.first_pitch_time = datetime.now()
+        with gc2:
+            if st.button("↺ Reset Clock", key="clock_reset", use_container_width=True):
+                st.session_state.game_started = False
+                st.session_state.first_pitch_time = None
+
+        if st.session_state.game_started and st.session_state.first_pitch_time:
+            elapsed = datetime.now() - st.session_state.first_pitch_time
+            remaining = timedelta(minutes=selected_minutes) - elapsed
+
+            m1, m2 = st.columns(2)
+            with m1:
+                st.metric("Elapsed", format_td(elapsed))
+            with m2:
+                st.metric("Remaining", format_td(remaining))
+
+            if remaining.total_seconds() <= 0:
+                st.error("Time limit reached.")
+            elif remaining.total_seconds() <= 900:
+                st.warning("Final 15 minutes of game limit.")
+            else:
+                st.success("Clock running inside time window.")
+
+            st.caption(f"First pitch logged at {format_dt(st.session_state.first_pitch_time)}")
         else:
-            st.success("Clock running inside time window.")
+            m1, m2 = st.columns(2)
+            with m1:
+                st.metric("Elapsed", "00:00")
+            with m2:
+                st.metric("Remaining", f"{selected_minutes}:00")
+            st.info("Clock not started yet. Tap Start Game on first pitch.")
 
-        st.caption(f"First pitch logged at {format_dt(st.session_state.first_pitch_time)}")
+        st.markdown("### ⚾ Live Game Count")
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            st.metric("Balls", "2")
+        with c2:
+            st.metric("Strikes", "1")
+        with c3:
+            st.metric("Outs", "0")
+        with c4:
+            st.metric("Pitch", "47")
+
+    elif active_panel == "emergency":
+        st.markdown("""
+        <div class="panel">
+            <div class="panel-title">Emergency Workflow</div>
+            <div class="panel-big">Critical Actions</div>
+            <div class="panel-sub">Fast emergency response tools for assignor notification and incident handling.</div>
+            <div class="status-pill alert">Emergency tools armed</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        e1, e2 = st.columns(2)
+        with e1:
+            if st.button("🚨 Alert Assignor", key="alert_assignor", use_container_width=True):
+                st.error("Emergency alert workflow triggered for assignor and safety contact.")
+        with e2:
+            if st.button("📝 Incident Report", key="incident_report", use_container_width=True):
+                st.success("Incident report workflow opened.")
+
+        if st.button("📞 Contact Crew Chief", key="emergency_crew", use_container_width=True):
+            st.success("Crew communication lane opened.")
+
     else:
-        m1, m2 = st.columns(2)
-        with m1:
-            st.metric("Elapsed", "00:00")
-        with m2:
-            st.metric("Remaining", f"{selected_minutes}:00")
-        st.info("Clock not started yet. Tap Start Game on first pitch.")
+        st.markdown("""
+        <div class="panel">
+            <div class="panel-title">Rules + Crew Support</div>
+            <div class="panel-big">Fast Field Decision Support</div>
+            <div class="panel-sub">Rule context, crew operations, and organizational readiness in one place.</div>
+            <div class="status-pill">Operationally ready</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    st.markdown("### ⚾ Live Game Count")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.metric("Balls", "2")
-    with c2:
-        st.metric("Strikes", "1")
-    with c3:
-        st.metric("Outs", "0")
-    with c4:
-        st.metric("Pitch", "47")
+        st.metric("Most Common Call Tonight", "Obstruction / Interference")
+        r1, r2 = st.columns(2)
+        with r1:
+            st.metric("Rulebook Loaded", "NFHS")
+        with r2:
+            st.metric("Confidence Mode", "High")
+        st.info("Game note: kill the play decisively, then verbalize obstruction separately from interference so coaches hear command, not confusion.")
 
 # -----------------------------
 # Secondary tools
@@ -717,6 +865,6 @@ with st.expander("💬 Crew Chat + Certification"):
         st.toast("Certification record updated.")
 
 st.markdown(
-    '<div class="footer-note">UmpCompanion live prototype • fast field workflow • built for serious baseball operations</div>',
+    '<div class="footer-note">UmpCompanion live prototype • accountability + fast field workflow • built for serious baseball operations</div>',
     unsafe_allow_html=True
 )
