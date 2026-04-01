@@ -9,7 +9,7 @@ st.set_page_config(
 )
 
 # -----------------------------
-# Session State
+# Session State Defaults
 # -----------------------------
 defaults = {
     "checked_in": False,
@@ -40,7 +40,7 @@ for k, v in defaults.items():
         st.session_state[k] = v
 
 # -----------------------------
-# Static demo values
+# Static Demo Values
 # -----------------------------
 current_time = datetime.now()
 assignment = "Varsity High School"
@@ -51,7 +51,7 @@ partner_eta = "6 Minutes"
 partner_eta_minutes = 6
 weather_temp = "68°F"
 weather_summary = "Clear"
-lightning_risk = "No Lightning"
+
 org_message = "SBUO Reminder: polish shoes, clean hat, sharp plate conference presence."
 nfhs_update = "NFHS Point of Emphasis: obstruction and slide rule communication."
 
@@ -105,11 +105,6 @@ def get_plate_status(td, checked_in):
         return ("Conference Due / Start Now", "status-pill alert")
     return ("Past Due", "status-pill alert")
 
-plate_status_text, plate_status_class = get_plate_status(
-    plate_meeting_countdown,
-    st.session_state.checked_in
-)
-
 def get_checkin_text():
     if st.session_state.checked_in and st.session_state.check_in_time:
         return f"Checked in {format_dt(st.session_state.check_in_time)}"
@@ -133,8 +128,99 @@ def get_clock_status():
         return "Clock running"
     return "Clock not started"
 
+def get_ops_note(
+    checked_in,
+    check_in_time,
+    plate_meeting_countdown,
+    weather_status,
+    game_started,
+    first_pitch_time,
+    selected_minutes,
+    partner_eta_minutes,
+):
+    clock_status = "Clock not started"
+    remaining = None
+    if game_started and first_pitch_time:
+        elapsed = datetime.now() - first_pitch_time
+        remaining = timedelta(minutes=selected_minutes) - elapsed
+        if remaining.total_seconds() <= 0:
+            clock_status = "Time limit reached"
+        elif remaining.total_seconds() <= 900:
+            clock_status = "Final 15 minutes"
+        else:
+            clock_status = "Clock running"
+
+    if weather_status == "lightning":
+        return {
+            "level": "critical",
+            "title": "Lightning Alert Active",
+            "message": "Lightning mode is active. Suspend play, clear the field, and begin delay protocol immediately.",
+            "action": "Suspend play now and notify crew / assignor."
+        }
+
+    if plate_meeting_countdown.total_seconds() <= 0 and not checked_in:
+        overdue = abs(plate_meeting_countdown)
+        return {
+            "level": "critical",
+            "title": "Plate Conference Overdue",
+            "message": f"You are not checked in and the plate conference is overdue by {format_td(overdue)}.",
+            "action": "Check in immediately and proceed directly to the plate area."
+        }
+
+    if 0 < plate_meeting_countdown.total_seconds() <= 600 and not checked_in:
+        return {
+            "level": "warning",
+            "title": "Check-In Needed",
+            "message": f"Plate conference is due in {format_td(plate_meeting_countdown)} and you are not checked in yet.",
+            "action": "Check in now and head toward the plate area."
+        }
+
+    if partner_eta_minutes >= 8 and plate_meeting_countdown.total_seconds() <= 900:
+        return {
+            "level": "warning",
+            "title": "Partner Arrival Risk",
+            "message": f"Partner ETA is {partner_eta_minutes} minutes and the plate conference window is tightening.",
+            "action": "Consider contacting your partner now."
+        }
+
+    if weather_status == "caution":
+        return {
+            "level": "warning",
+            "title": "Weather Caution",
+            "message": "Weather caution mode is active. Conditions are playable, but radar awareness should stay high.",
+            "action": "Monitor radar and keep crews ready for a delay decision."
+        }
+
+    if game_started and remaining is not None and 0 < remaining.total_seconds() <= 900:
+        return {
+            "level": "warning",
+            "title": "Game Clock Tightening",
+            "message": f"The game is inside the final 15 minutes. Remaining time: {format_td(remaining)}.",
+            "action": "Manage pace and stay aware of the game limit."
+        }
+
+    if checked_in and plate_meeting_countdown.total_seconds() > 0:
+        return {
+            "level": "good",
+            "title": "On Track",
+            "message": f"You are checked in and on pace for the plate conference in {format_td(plate_meeting_countdown)}.",
+            "action": "Stay on schedule and prepare for the pregame conference."
+        }
+
+    return {
+        "level": "good",
+        "title": "Operationally Ready",
+        "message": "No immediate game-day risks are active right now.",
+        "action": "Maintain readiness and monitor the control center."
+    }
+
+plate_status_text, plate_status_class = get_plate_status(
+    plate_meeting_countdown,
+    st.session_state.checked_in
+)
+
 # -----------------------------
-# Weather state
+# Weather State
 # -----------------------------
 weather_map = {
     "clear": {
@@ -162,7 +248,7 @@ weather_map = {
 weather_state = weather_map[st.session_state.weather_status]
 
 # -----------------------------
-# Dynamic live feed values
+# Dynamic Live Values
 # -----------------------------
 lightning_risk = (
     "Lightning Alert Active"
@@ -174,6 +260,17 @@ lightning_risk = (
 crew_status = get_partner_status()
 check_in_text = get_checkin_text()
 clock_status = get_clock_status()
+
+ops_note = get_ops_note(
+    checked_in=st.session_state.checked_in,
+    check_in_time=st.session_state.check_in_time,
+    plate_meeting_countdown=plate_meeting_countdown,
+    weather_status=st.session_state.weather_status,
+    game_started=st.session_state.game_started,
+    first_pitch_time=st.session_state.first_pitch_time,
+    selected_minutes=selected_minutes,
+    partner_eta_minutes=partner_eta_minutes,
+)
 
 # -----------------------------
 # CSS
@@ -503,6 +600,80 @@ p, div, span, label {
     border: 1px solid rgba(216,53,53,.34);
 }
 
+/* Ops Agent */
+.ops-agent-card {
+    position: relative;
+    overflow: hidden;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.018)),
+        linear-gradient(180deg, rgba(17,28,43,.96), rgba(13,22,34,.96));
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 16px;
+    box-shadow: var(--shadow-soft);
+    margin-bottom: 10px;
+}
+.ops-agent-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--gold), var(--blue));
+    opacity: .95;
+}
+.ops-agent-kicker {
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .16em;
+    font-size: .66rem;
+    font-weight: 900;
+    margin-bottom: 8px;
+}
+.ops-agent-title {
+    color: white;
+    font-size: 1.10rem;
+    font-weight: 900;
+    line-height: 1.15;
+}
+.ops-agent-message {
+    color: #D9E6F2;
+    font-size: .92rem;
+    margin-top: 7px;
+}
+.ops-agent-action {
+    color: #F5F8FC;
+    font-size: .90rem;
+    margin-top: 10px;
+    font-weight: 700;
+}
+.ops-pill-good,
+.ops-pill-warn,
+.ops-pill-critical {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 900;
+}
+.ops-pill-good {
+    background: rgba(39,193,116,.13);
+    color: var(--green-3);
+    border: 1px solid rgba(39,193,116,.34);
+    box-shadow: var(--glow-green);
+}
+.ops-pill-warn {
+    background: rgba(227,184,97,.12);
+    color: #FFE39C;
+    border: 1px solid rgba(227,184,97,.34);
+    box-shadow: var(--glow-gold);
+}
+.ops-pill-critical {
+    background: rgba(216,53,53,.14);
+    color: #FFC1C1;
+    border: 1px solid rgba(216,53,53,.34);
+}
+
 /* Inputs and buttons */
 textarea, input, select {
     border-radius: 14px !important;
@@ -724,7 +895,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # -----------------------------
-# Accountability + active panel row
+# Accountability + Active Panel Row
 # -----------------------------
 left, right = st.columns([1.12, 1])
 
@@ -774,6 +945,22 @@ with left:
         """, unsafe_allow_html=True)
 
 with right:
+    ops_level_class = {
+        "good": "ops-pill-good",
+        "warning": "ops-pill-warn",
+        "critical": "ops-pill-critical"
+    }[ops_note["level"]]
+
+    st.markdown(f"""
+    <div class="ops-agent-card">
+        <div class="ops-agent-kicker">AI Ops Note</div>
+        <div class="ops-agent-title">{ops_note["title"]}</div>
+        <div class="ops-agent-message">{ops_note["message"]}</div>
+        <div class="{ops_level_class}">{ops_note["level"].upper()}</div>
+        <div class="ops-agent-action">Recommended action: {ops_note["action"]}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
     active_panel = st.session_state.active_panel
 
     if active_panel == "weather":
