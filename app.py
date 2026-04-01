@@ -11,30 +11,33 @@ st.set_page_config(
 # -----------------------------
 # Session State
 # -----------------------------
-if "checked_in" not in st.session_state:
-    st.session_state.checked_in = False
-if "check_in_time" not in st.session_state:
-    st.session_state.check_in_time = None
-if "game_started" not in st.session_state:
-    st.session_state.game_started = False
-if "first_pitch_time" not in st.session_state:
-    st.session_state.first_pitch_time = None
-if "weather_status" not in st.session_state:
-    st.session_state.weather_status = "clear"
-if "rule_result_visible" not in st.session_state:
-    st.session_state.rule_result_visible = False
-if "rule_result_title" not in st.session_state:
-    st.session_state.rule_result_title = "NFHS Rule 2-32 — Obstruction"
-if "rule_result_text" not in st.session_state:
-    st.session_state.rule_result_text = (
+defaults = {
+    "checked_in": False,
+    "check_in_time": None,
+    "game_started": False,
+    "first_pitch_time": None,
+    "weather_status": "clear",
+    "rule_result_visible": False,
+    "rule_result_title": "NFHS Rule 2-32 — Obstruction",
+    "rule_result_text": (
         "Immediate dead ball on Type A obstruction when a play is being made on the obstructed runner. "
         "Award the obstructed runner at least one base beyond the base they would have reached without obstruction. "
         "Place all other runners accordingly."
-    )
-if "active_panel" not in st.session_state:
-    st.session_state.active_panel = "rules"
-if "game_limit" not in st.session_state:
-    st.session_state.game_limit = "2:00"
+    ),
+    "active_panel": "rules",
+    "game_limit": "2:00",
+    "sub_scan_done": False,
+    "sub_assignor_notified": False,
+    "nav_opened": False,
+    "nav_notes_opened": False,
+    "emergency_triggered": False,
+    "incident_started": False,
+    "crew_chief_contacted": False,
+    "last_action": "System ready",
+}
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 # -----------------------------
 # Static demo values
@@ -45,11 +48,10 @@ game_site = "Field 7 • Saratoga Springs"
 ruleset = "NFHS Varsity"
 partner_name = "Mike D."
 partner_eta = "6 Minutes"
+partner_eta_minutes = 6
 weather_temp = "68°F"
 weather_summary = "Clear"
 lightning_risk = "No Lightning"
-crew_status = "Partner on pace"
-
 org_message = "SBUO Reminder: polish shoes, clean hat, sharp plate conference presence."
 nfhs_update = "NFHS Point of Emphasis: obstruction and slide rule communication."
 
@@ -78,27 +80,58 @@ def format_td(td):
         return f"{hours:02}:{minutes:02}:{seconds:02}"
     return f"{minutes:02}:{seconds:02}"
 
-plate_meeting_countdown = plate_meeting_time - current_time
-first_pitch_countdown = game_time - current_time
-
 limits = {
     "1:45": 105,
     "2:00": 120,
     "2:10": 130
 }
+
+plate_meeting_countdown = plate_meeting_time - current_time
+first_pitch_countdown = game_time - current_time
 selected_limit = st.session_state["game_limit"]
 selected_minutes = limits[selected_limit]
 
-def get_plate_status(td):
+def get_plate_status(td, checked_in):
     secs = td.total_seconds()
-    if secs > 900:
+    if secs > 900 and checked_in:
         return ("On Track", "status-pill")
-    elif secs > 0:
+    if secs > 900 and not checked_in:
+        return ("Check In Pending", "status-pill warn")
+    if 0 < secs <= 900 and checked_in:
         return ("Due Soon", "status-pill warn")
-    else:
-        return ("Past Due", "status-pill alert")
+    if 0 < secs <= 900 and not checked_in:
+        return ("Late Risk", "status-pill warn")
+    if secs <= 0 and checked_in:
+        return ("Conference Due / Start Now", "status-pill alert")
+    return ("Past Due", "status-pill alert")
 
-plate_status_text, plate_status_class = get_plate_status(plate_meeting_countdown)
+plate_status_text, plate_status_class = get_plate_status(
+    plate_meeting_countdown,
+    st.session_state.checked_in
+)
+
+def get_checkin_text():
+    if st.session_state.checked_in and st.session_state.check_in_time:
+        return f"Checked in {format_dt(st.session_state.check_in_time)}"
+    return "Not checked in"
+
+def get_partner_status():
+    if partner_eta_minutes <= 5:
+        return "Partner on pace"
+    if partner_eta_minutes <= 10:
+        return "Partner cutting it close"
+    return "Partner arrival risk"
+
+def get_clock_status():
+    if st.session_state.game_started and st.session_state.first_pitch_time:
+        elapsed = datetime.now() - st.session_state.first_pitch_time
+        remaining = timedelta(minutes=selected_minutes) - elapsed
+        if remaining.total_seconds() <= 0:
+            return "Time limit reached"
+        if remaining.total_seconds() <= 900:
+            return "Final 15 minutes"
+        return "Clock running"
+    return "Clock not started"
 
 # -----------------------------
 # Weather state
@@ -127,6 +160,20 @@ weather_map = {
     }
 }
 weather_state = weather_map[st.session_state.weather_status]
+
+# -----------------------------
+# Dynamic live feed values
+# -----------------------------
+lightning_risk = (
+    "Lightning Alert Active"
+    if st.session_state.weather_status == "lightning"
+    else "Monitor Radar"
+    if st.session_state.weather_status == "caution"
+    else "No Lightning"
+)
+crew_status = get_partner_status()
+check_in_text = get_checkin_text()
+clock_status = get_clock_status()
 
 # -----------------------------
 # CSS
@@ -569,12 +616,6 @@ st.markdown(f"""
 # -----------------------------
 # Top snapshot
 # -----------------------------
-check_in_text = (
-    f"Checked in {format_dt(st.session_state.check_in_time)}"
-    if st.session_state.checked_in and st.session_state.check_in_time
-    else "Not checked in"
-)
-
 st.markdown(f"""
 <div class="snapshot-grid">
     <div class="snap">
@@ -595,7 +636,7 @@ st.markdown(f"""
     </div>
     <div class="snap">
         <div class="snap-k">Ruleset</div>
-        <div class="snap-v">NFHS Varsity</div>
+        <div class="snap-v">{ruleset}</div>
     </div>
     <div class="snap">
         <div class="snap-k">Check-In</div>
@@ -619,15 +660,19 @@ with r1c1:
     if st.button("✅ Check In", key="panel_checkin", use_container_width=True):
         st.session_state.checked_in = True
         st.session_state.check_in_time = datetime.now()
+        st.session_state.last_action = f"Checked in at {format_dt(st.session_state.check_in_time)}"
 with r1c2:
     if st.button("📖 Rules", key="panel_rules", use_container_width=True):
         st.session_state.active_panel = "rules"
+        st.session_state.last_action = "Rules panel opened"
 with r1c3:
     if st.button("⏱ Clock", key="panel_clock", use_container_width=True):
         st.session_state.active_panel = "clock"
+        st.session_state.last_action = "Clock panel opened"
 with r1c4:
     if st.button("🌩 Weather", key="panel_weather", use_container_width=True):
         st.session_state.active_panel = "weather"
+        st.session_state.last_action = "Weather panel opened"
 st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('<div class="control-row">', unsafe_allow_html=True)
@@ -635,12 +680,15 @@ r2c1, r2c2, r2c3 = st.columns(3)
 with r2c1:
     if st.button("🚨 Emergency", key="panel_emergency", use_container_width=True):
         st.session_state.active_panel = "emergency"
+        st.session_state.last_action = "Emergency panel opened"
 with r2c2:
     if st.button("🔄 Find Sub", key="panel_sub", use_container_width=True):
         st.session_state.active_panel = "sub"
+        st.session_state.last_action = "Find Sub panel opened"
 with r2c3:
     if st.button("📍 Navigate", key="panel_nav", use_container_width=True):
         st.session_state.active_panel = "nav"
+        st.session_state.last_action = "Navigation panel opened"
 st.markdown('</div>', unsafe_allow_html=True)
 
 # -----------------------------
@@ -653,9 +701,13 @@ ticker_content = f"""
 <span class="ticker-sep">•</span>
 <span class="ticker-item">📖 NFHS Update: {nfhs_update}</span>
 <span class="ticker-sep">•</span>
-<span class="ticker-item">🧢 Plate Conference Target: {format_dt(plate_meeting_time)}</span>
+<span class="ticker-item">🧢 Plate Conference Target: {format_dt(plate_meeting_time)} • Status: {plate_status_text}</span>
 <span class="ticker-sep">•</span>
-<span class="ticker-item">✅ Crew Status: {crew_status}</span>
+<span class="ticker-item">✅ Check-In: {check_in_text}</span>
+<span class="ticker-sep">•</span>
+<span class="ticker-item">⏱ Clock Status: {clock_status}</span>
+<span class="ticker-sep">•</span>
+<span class="ticker-item">🎯 Last Action: {st.session_state.last_action}</span>
 <span class="ticker-sep">•</span>
 """
 
@@ -709,6 +761,7 @@ with left:
             "Award the obstructed runner at least one base beyond the base they would have reached without obstruction. "
             "Place all other runners accordingly."
         )
+        st.session_state.last_action = "Rule result generated"
 
     if st.session_state.rule_result_visible:
         st.markdown(f"""
@@ -724,6 +777,7 @@ with right:
     active_panel = st.session_state.active_panel
 
     if active_panel == "weather":
+        weather_state = weather_map[st.session_state.weather_status]
         st.markdown(f"""
         <div class="panel">
             <div class="panel-title">Live Weather Alert</div>
@@ -737,12 +791,15 @@ with right:
         with wc1:
             if st.button("Clear", key="weather_clear", use_container_width=True):
                 st.session_state.weather_status = "clear"
+                st.session_state.last_action = "Weather set to Clear"
         with wc2:
             if st.button("Caution", key="weather_caution", use_container_width=True):
                 st.session_state.weather_status = "caution"
+                st.session_state.last_action = "Weather set to Caution"
         with wc3:
             if st.button("Lightning", key="weather_lightning", use_container_width=True):
                 st.session_state.weather_status = "lightning"
+                st.session_state.last_action = "Weather set to Lightning"
 
         weather_state = weather_map[st.session_state.weather_status]
         getattr(st, weather_state["alert_func"])(weather_state["alert_text"])
@@ -772,10 +829,12 @@ with right:
             if st.button("⏱ Start Game", key="clock_start", use_container_width=True):
                 st.session_state.game_started = True
                 st.session_state.first_pitch_time = datetime.now()
+                st.session_state.last_action = f"Game clock started at {format_dt(st.session_state.first_pitch_time)}"
         with gc2:
             if st.button("↺ Reset Clock", key="clock_reset", use_container_width=True):
                 st.session_state.game_started = False
                 st.session_state.first_pitch_time = None
+                st.session_state.last_action = "Game clock reset"
 
         if st.session_state.game_started and st.session_state.first_pitch_time:
             elapsed = datetime.now() - st.session_state.first_pitch_time
@@ -827,12 +886,18 @@ with right:
         e1, e2 = st.columns(2)
         with e1:
             if st.button("🚨 Alert Assignor", key="alert_assignor", use_container_width=True):
+                st.session_state.emergency_triggered = True
+                st.session_state.last_action = "Emergency alert sent to assignor"
                 st.error("Emergency alert workflow triggered for assignor and safety contact.")
         with e2:
             if st.button("📝 Incident Report", key="incident_report", use_container_width=True):
+                st.session_state.incident_started = True
+                st.session_state.last_action = "Incident report workflow opened"
                 st.success("Incident report workflow opened.")
 
         if st.button("📞 Contact Crew Chief", key="emergency_crew", use_container_width=True):
+            st.session_state.crew_chief_contacted = True
+            st.session_state.last_action = "Crew chief contact initiated"
             st.success("Crew communication lane opened.")
 
     elif active_panel == "sub":
@@ -846,9 +911,18 @@ with right:
         """, unsafe_allow_html=True)
 
         if st.button("🔄 Scan Nearest Available", key="sub_scan", use_container_width=True):
+            st.session_state.sub_scan_done = True
+            st.session_state.last_action = "Nearest substitute scan completed"
             st.info("Nearest qualified official 4.2 miles away notified. Assignor copied.")
         if st.button("📤 Notify Assignor of Coverage Risk", key="sub_notify", use_container_width=True):
+            st.session_state.sub_assignor_notified = True
+            st.session_state.last_action = "Coverage risk notification sent"
             st.warning("Coverage risk notification sent to assignor workflow.")
+
+        if st.session_state.sub_scan_done:
+            st.success("Replacement scan completed.")
+        if st.session_state.sub_assignor_notified:
+            st.info("Assignor coverage-risk notification is on file.")
 
     elif active_panel == "nav":
         st.markdown(f"""
@@ -861,9 +935,18 @@ with right:
         """, unsafe_allow_html=True)
 
         if st.button("📍 Open Field Navigation", key="nav_open", use_container_width=True):
+            st.session_state.nav_opened = True
+            st.session_state.last_action = "Field navigation opened"
             st.info("Opening exact field pin with preferred parking approach.")
         if st.button("🧭 View Arrival Notes", key="nav_notes", use_container_width=True):
+            st.session_state.nav_notes_opened = True
+            st.session_state.last_action = "Arrival notes opened"
             st.success("Arrival note: park behind first-base side concessions and walk to plate area.")
+
+        if st.session_state.nav_opened:
+            st.success("Navigation workflow active.")
+        if st.session_state.nav_notes_opened:
+            st.info("Arrival notes viewed.")
 
     else:
         st.markdown("""
@@ -890,18 +973,25 @@ with st.expander("⚾ Secondary Game Day Tools"):
     s1, s2, s3 = st.columns(3)
     with s1:
         if st.button("🔄 Find Replacement Umpire", use_container_width=True, key="replace"):
+            st.session_state.sub_scan_done = True
+            st.session_state.last_action = "Secondary replacement scan triggered"
             st.info("Nearest qualified official pinged. Assignor copied.")
     with s2:
         if st.button("📍 Open Field Navigation", use_container_width=True, key="nav_lower"):
+            st.session_state.nav_opened = True
+            st.session_state.last_action = "Secondary navigation opened"
             st.info("Opening exact field pin with preferred parking approach.")
     with s3:
         if st.button("🧾 Generate Incident Report", use_container_width=True, key="incident_lower"):
+            st.session_state.incident_started = True
+            st.session_state.last_action = "Secondary incident workflow opened"
             st.success("Professional incident report created and ready for review.")
 
 with st.expander("💬 Crew Chat + Certification"):
     st.subheader("Private Crew Chat")
     message = st.text_input("Type message to crew:")
     if st.button("Send Message", use_container_width=True, key="send_msg"):
+        st.session_state.last_action = "Crew message posted"
         st.success("Message posted to crew channel.")
 
     cc1, cc2 = st.columns(2)
@@ -913,6 +1003,7 @@ with st.expander("💬 Crew Chat + Certification"):
         st.write("Association profile: **active and eligible**")
 
     if st.button("Add Score / Mark Attendance", use_container_width=True, key="attendance"):
+        st.session_state.last_action = "Certification record updated"
         st.toast("Certification record updated.")
 
 st.markdown(
