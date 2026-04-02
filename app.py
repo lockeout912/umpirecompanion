@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, date
 import pandas as pd
 
 st.set_page_config(
-    page_title="UmpCompanion-SBUO",
+    page_title="UmpCompanion",
     page_icon="🧢",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -37,13 +37,11 @@ defaults = {
     "incident_started": False,
     "crew_chief_contacted": False,
     "last_action": "System ready",
-    "schedule_window": "All",
     "coverage_selected_official": None,
 }
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
-
 
 # =========================================================
 # DATA
@@ -81,7 +79,7 @@ def load_assignments():
 
 
 def load_official_pool():
-    officials = [
+    return [
         {"name": "Cody L.", "home_base": "Ballston Spa", "distance_miles": 7.2, "plate_skill": 84, "base_skill": 88, "availability": "Available", "reliability": 92, "cert": "NFHS", "notes": "Strong hustle, newer but coachable."},
         {"name": "Mike D.", "home_base": "Saratoga Springs", "distance_miles": 12.5, "plate_skill": 93, "base_skill": 89, "availability": "Maybe", "reliability": 97, "cert": "NFHS + Varsity", "notes": "Veteran presence. Better for plate-heavy spots."},
         {"name": "Chris M.", "home_base": "Clifton Park", "distance_miles": 9.8, "plate_skill": 79, "base_skill": 91, "availability": "Available", "reliability": 90, "cert": "NFHS", "notes": "Efficient on bases, dependable fill."},
@@ -90,12 +88,10 @@ def load_official_pool():
         {"name": "Matt P.", "home_base": "Guilderland", "distance_miles": 21.3, "plate_skill": 90, "base_skill": 87, "availability": "Maybe", "reliability": 89, "cert": "NFHS + College", "notes": "Excellent upside, farther travel."},
         {"name": "Rob T.", "home_base": "Queensbury", "distance_miles": 28.6, "plate_skill": 82, "base_skill": 84, "availability": "Unavailable", "reliability": 91, "cert": "NFHS", "notes": "Good official but currently blocked."},
     ]
-    return officials
 
 
 assignments = load_assignments()
 official_pool = load_official_pool()
-
 
 # =========================================================
 # HELPERS
@@ -414,8 +410,43 @@ def build_assignor_message(game, candidate):
     )
 
 
-limits = {"1:45": 105, "2:00": 120, "2:10": 130}
+def get_weather_summary():
+    if st.session_state.weather_status == "lightning":
+        return ("Lightning Alert", "Suspend play / clear field")
+    if st.session_state.weather_status == "caution":
+        return ("Weather Caution", "Monitor radar")
+    return ("Clear / Playable", "No lightning risk")
 
+
+def get_coverage_status():
+    if st.session_state.coverage_selected_official:
+        return f"Recommended: {st.session_state.coverage_selected_official}"
+    if st.session_state.sub_assignor_notified:
+        return "Assignor notified of coverage risk"
+    if st.session_state.sub_scan_done:
+        return "Replacement scan completed"
+    return "No active coverage issue"
+
+
+def build_live_feed_items():
+    _, next_game, total_fees, plate_count, base_count = get_dashboard_metrics(assignments)
+    weather_title, weather_detail = get_weather_summary()
+    schedule_note = get_schedule_agent_note(assignments)
+
+    return [
+        f"🌤 Weather: {weather_title} • {weather_detail}",
+        "📣 Org Note: SBUO reminder — clean hat, polished shoes, strong plate presence",
+        "📖 NFHS Update: obstruction / interference communication remains a point of emphasis",
+        f"🧢 Next Assignment: Game #{next_game['game_id']} • {format_game_date(next_game['game_dt'])} • {format_dt(next_game['game_dt'])}",
+        f"💰 Fee Board: {len(assignments)} games loaded • total fees {format_currency(total_fees)}",
+        f"📍 Coverage Status: {get_coverage_status()}",
+        f"🎯 Schedule Agent: {get_schedule_agent_note(assignments)['title']}",
+        f"⚾ Role Split: Plate {plate_count} • Base {base_count}",
+        f"✅ Last Action: {st.session_state.last_action}",
+    ]
+
+
+limits = {"1:45": 105, "2:00": 120, "2:10": 130}
 
 # =========================================================
 # STYLES
@@ -423,7 +454,11 @@ limits = {"1:45": 105, "2:00": 120, "2:10": 130}
 st.markdown("""
 <style>
 .stApp {
-    background: linear-gradient(180deg, #06101A 0%, #08131F 45%, #091522 100%);
+    background:
+        radial-gradient(circle at 7% 10%, rgba(103,181,255,.08), transparent 18%),
+        radial-gradient(circle at 92% 8%, rgba(184,94,47,.07), transparent 16%),
+        radial-gradient(circle at 50% 100%, rgba(39,193,116,.04), transparent 20%),
+        linear-gradient(180deg, #06101A 0%, #08131F 45%, #091522 100%);
     color: #F8F4EA;
 }
 .block-container {
@@ -437,6 +472,7 @@ st.markdown("""
     border-radius: 16px;
     padding: 16px;
     margin-bottom: 12px;
+    box-shadow: 0 10px 26px rgba(0,0,0,.18);
 }
 .topbar {
     background: linear-gradient(115deg, #0A1726 0%, #102338 50%, #16395E 78%, #19334F 100%);
@@ -466,11 +502,23 @@ st.markdown("""
 .agent-good { border-left: 4px solid #27C174; }
 .agent-warning { border-left: 4px solid #E3B861; }
 .agent-critical { border-left: 4px solid #D83535; }
+
 div[data-testid="stMetric"] {
     background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
     border: 1px solid rgba(155,178,205,0.16);
     border-radius: 16px;
     padding: 12px 14px;
+}
+div[data-testid="stMetricLabel"] {
+    color: #B4C5D7 !important;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    font-size: .66rem !important;
+    font-weight: 800 !important;
+}
+div[data-testid="stMetricValue"] {
+    color: #FFFFFF !important;
+    font-weight: 900 !important;
 }
 .stButton > button {
     width: 100%;
@@ -481,9 +529,155 @@ div[data-testid="stMetric"] {
     color: #B8C7D8;
     font-size: .88rem;
 }
+
+/* Command Center Header */
+.cc-shell {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(115deg, #0A1726 0%, #102338 50%, #16395E 78%, #19334F 100%);
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 20px;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+}
+.cc-kicker {
+    color: #C7D6E8;
+    font-size: .68rem;
+    text-transform: uppercase;
+    letter-spacing: .18em;
+    font-weight: 900;
+    margin-bottom: 6px;
+}
+.cc-title {
+    color: white;
+    font-size: 1.85rem;
+    font-weight: 900;
+    line-height: 1.05;
+}
+.cc-sub {
+    color: #D9E4F0;
+    font-size: .94rem;
+    margin-top: 8px;
+}
+.cc-live-pill {
+    display: inline-block;
+    margin-top: 10px;
+    background: rgba(227,184,97,.15);
+    border: 1px solid rgba(255,255,255,.12);
+    color: #FFF4D6;
+    border-radius: 999px;
+    padding: 7px 12px;
+    font-weight: 900;
+    font-size: .76rem;
+}
+
+/* Scrolling ticker */
+.ticker-shell {
+    margin: 10px 0 14px 0;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,.09);
+    background: linear-gradient(90deg, rgba(17,36,58,.96), rgba(21,45,74,.98) 45%, rgba(16,37,60,.96));
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: stretch;
+}
+.ticker-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(180deg, #B85E2F, #8F431D);
+    color: white;
+    font-weight: 900;
+    padding: 0 16px;
+    letter-spacing: .08em;
+    font-size: .76rem;
+    text-transform: uppercase;
+    white-space: nowrap;
+    border-right: 1px solid rgba(255,255,255,.08);
+}
+.ticker-label-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #FFD981;
+    box-shadow: 0 0 12px rgba(255,217,129,.7);
+}
+.ticker-window {
+    overflow: hidden;
+    position: relative;
+}
+.ticker-track {
+    display: flex;
+    width: max-content;
+    white-space: nowrap;
+    animation: ticker-scroll 75s linear infinite;
+    will-change: transform;
+}
+.ticker-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    padding: 12px 0;
+}
+.ticker-item {
+    color: #F8FBFF;
+    font-weight: 800;
+    font-size: .90rem;
+    letter-spacing: .01em;
+}
+.ticker-sep {
+    color: #8EC2FF;
+    opacity: .95;
+    padding: 0 18px;
+    font-weight: 900;
+}
+@keyframes ticker-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+/* Snapshot grid */
+.command-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.command-tile {
+    background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
+    border: 1px solid rgba(155,178,205,0.16);
+    border-radius: 15px;
+    padding: 12px;
+    box-shadow: 0 10px 26px rgba(0,0,0,.12);
+}
+.command-k {
+    color: #AFC0D3;
+    text-transform: uppercase;
+    letter-spacing: .13em;
+    font-size: .62rem;
+    font-weight: 900;
+    margin-bottom: 6px;
+}
+.command-v {
+    color: #FFF;
+    font-size: .96rem;
+    font-weight: 900;
+    line-height: 1.15;
+}
+.command-v.gold { color: #FFD981; }
+.command-v.green { color: #94F0BD; }
+.command-v.blue { color: #A5D2FF; }
+
+@media (max-width: 1350px) {
+    .command-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 700px) {
+    .command-grid { grid-template-columns: repeat(2, 1fr); }
+    .cc-title { font-size: 1.5rem; }
+}
 </style>
 """, unsafe_allow_html=True)
-
 
 # =========================================================
 # NAV
@@ -511,69 +705,176 @@ def render_topbar():
         if st.button("Reports", key="nav_reports", use_container_width=True):
             st.session_state.page = "Reports"
 
-
 # =========================================================
 # DASHBOARD
 # =========================================================
 def render_dashboard():
     today_games, next_game, total_fees, plate_count, base_count = get_dashboard_metrics(assignments)
     schedule_note = get_schedule_agent_note(assignments)
-    pattern_notes = analyze_schedule_patterns(assignments)[:4]
+    pattern_notes = analyze_schedule_patterns(assignments)[:5]
+    weather_title, weather_detail = get_weather_summary()
 
-    st.subheader("Command Overview")
-
-    m1, m2, m3, m4, m5 = st.columns(5)
-    with m1:
-        st.metric("Total Games", len(assignments))
-    with m2:
-        st.metric("Today's Games", len(today_games))
-    with m3:
-        st.metric("Total Fees", format_currency(total_fees))
-    with m4:
-        st.metric("Plate Assignments", plate_count)
-    with m5:
-        st.metric("Base Assignments", base_count)
+    live_items = build_live_feed_items()
+    ticker_content = "".join(
+        [f'<span class="ticker-item">{item}</span><span class="ticker-sep">•</span>' for item in live_items]
+    )
 
     st.markdown(
         f"""
-        <div class="card agent-{schedule_note['level']}">
-            <h4>Schedule Agent</h4>
-            <p><strong>{schedule_note['title']}</strong></p>
-            <p>{schedule_note['message']}</p>
+        <div class="cc-shell">
+            <div class="cc-kicker">Umpire Operations Command Center</div>
+            <div class="cc-title">🧢 UmpCompanion</div>
+            <div class="cc-sub">
+                Next up: Game #{next_game['game_id']} • {next_game['home']} vs {next_game['away']} •
+                {format_game_date(next_game['game_dt'])} at {format_dt(next_game['game_dt'])}
+            </div>
+            <div class="cc-live-pill">● LIVE OPS MODE</div>
         </div>
         """,
         unsafe_allow_html=True
     )
 
-    left, right = st.columns([1.2, 1])
+    st.markdown(
+        f"""
+        <div class="ticker-shell">
+            <div class="ticker-label"><span class="ticker-label-dot"></span> Live Feed</div>
+            <div class="ticker-window">
+                <div class="ticker-track">
+                    <div class="ticker-content">{ticker_content}</div>
+                    <div class="ticker-content">{ticker_content}</div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        f"""
+        <div class="command-grid">
+            <div class="command-tile">
+                <div class="command-k">Next Assignment</div>
+                <div class="command-v gold">#{next_game['game_id']} • {next_game['position']}</div>
+            </div>
+            <div class="command-tile">
+                <div class="command-k">Today’s Games</div>
+                <div class="command-v">{len(today_games)}</div>
+            </div>
+            <div class="command-tile">
+                <div class="command-k">Total Games</div>
+                <div class="command-v">{len(assignments)}</div>
+            </div>
+            <div class="command-tile">
+                <div class="command-k">Fee Board</div>
+                <div class="command-v green">{format_currency(total_fees)}</div>
+            </div>
+            <div class="command-tile">
+                <div class="command-k">Plate Assignments</div>
+                <div class="command-v">{plate_count}</div>
+            </div>
+            <div class="command-tile">
+                <div class="command-k">Base Assignments</div>
+                <div class="command-v">{base_count}</div>
+            </div>
+            <div class="command-tile">
+                <div class="command-k">Weather</div>
+                <div class="command-v blue">{weather_title}</div>
+            </div>
+            <div class="command-tile">
+                <div class="command-k">Coverage</div>
+                <div class="command-v">{get_coverage_status()}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    left, right = st.columns([1.25, 1])
 
     with left:
         st.markdown(
             f"""
-            <div class="card">
-                <h4>Next Assignment</h4>
-                <p><strong>Game #{next_game['game_id']}</strong> • {next_game['position']} • {format_game_date(next_game['game_dt'])} at {format_dt(next_game['game_dt'])}</p>
-                <p>{next_game['home']} vs {next_game['away']}</p>
-                <p>{next_game['site']}</p>
-                <p>Fee: {format_currency(next_game['fee'])}</p>
+            <div class="card agent-{schedule_note['level']}">
+                <h4>Schedule Agent</h4>
+                <p><strong>{schedule_note['title']}</strong></p>
+                <p>{schedule_note['message']}</p>
             </div>
             """,
             unsafe_allow_html=True
         )
 
-        if st.button(f"Launch Game Day for #{next_game['game_id']}", key="launch_next_game", use_container_width=True):
-            set_selected_game(next_game["game_id"])
-            st.session_state.page = "Game Day"
+        st.markdown(
+            f"""
+            <div class="card">
+                <h4>Primary Assignment Focus</h4>
+                <p><strong>Game #{next_game['game_id']}</strong> • {next_game['position']}</p>
+                <p>{next_game['home']} vs {next_game['away']}</p>
+                <p>{next_game['site']}</p>
+                <p>{format_game_date(next_game['game_dt'])} • {format_dt(next_game['game_dt'])} • Fee {format_currency(next_game['fee'])}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown("### Quick Actions")
+        q1, q2, q3 = st.columns(3)
+        with q1:
+            if st.button(f"Launch Game #{next_game['game_id']}", key="dash_launch_game", use_container_width=True):
+                set_selected_game(next_game["game_id"])
+                st.session_state.page = "Game Day"
+        with q2:
+            if st.button("Open Full Schedule", key="dash_open_schedule", use_container_width=True):
+                st.session_state.page = "My Schedule"
+        with q3:
+            if st.button("Open Reports", key="dash_open_reports", use_container_width=True):
+                st.session_state.page = "Reports"
+
+        st.markdown("### Upcoming Assignments")
+        for g in sorted(assignments, key=lambda x: x["game_dt"])[:6]:
+            st.markdown(
+                f"""
+                <div class="card">
+                    <p><strong>Game #{g['game_id']}</strong> • {format_game_date(g['game_dt'])} • {format_dt(g['game_dt'])} • {g['position']}</p>
+                    <p>{g['home']} vs {g['away']}</p>
+                    <p>{g['site']}</p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
     with right:
+        st.markdown(
+            f"""
+            <div class="card">
+                <h4>Weather + Alert Status</h4>
+                <p><strong>{weather_title}</strong></p>
+                <p>{weather_detail}</p>
+                <p>Last action: {st.session_state.last_action}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
         st.markdown('<div class="card"><h4>Schedule Signals</h4>', unsafe_allow_html=True)
         if pattern_notes:
             for note in pattern_notes:
                 st.write(f"**{note['title']}** — {note['message']}")
         else:
-            st.write("No pattern issues detected.")
+            st.write("No schedule pattern issues detected.")
         st.markdown("</div>", unsafe_allow_html=True)
 
+        st.markdown(
+            f"""
+            <div class="card">
+                <h4>Operations Snapshot</h4>
+                <p><strong>Coverage:</strong> {get_coverage_status()}</p>
+                <p><strong>Check-In State:</strong> {get_checkin_text()}</p>
+                <p><strong>NFHS Pulse:</strong> Obstruction / interference communication emphasis</p>
+                <p><strong>Org Pulse:</strong> Professional appearance and strong pregame presence</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 # =========================================================
 # SCHEDULE
@@ -622,27 +923,26 @@ def render_schedule_cards(filtered):
         return
 
     for g in filtered:
-        with st.container():
-            st.markdown(
-                f"""
-                <div class="card">
-                    <h4>Game #{g['game_id']} • {format_game_date(g['game_dt'])} • {format_dt(g['game_dt'])}</h4>
-                    <p><strong>{g['home']}</strong> vs <strong>{g['away']}</strong></p>
-                    <p>{g['site']}</p>
-                    <p>{g['position']} • {g['sport_level']} • Fee {format_currency(g['fee'])} • {g['status']}</p>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button(f"Activate #{g['game_id']}", key=f"activate_{g['game_id']}", use_container_width=True):
-                    set_selected_game(g["game_id"])
-                    st.success(f"Game #{g['game_id']} is now active.")
-            with c2:
-                if st.button(f"Open Game Day #{g['game_id']}", key=f"open_gameday_{g['game_id']}", use_container_width=True):
-                    set_selected_game(g["game_id"])
-                    st.session_state.page = "Game Day"
+        st.markdown(
+            f"""
+            <div class="card">
+                <h4>Game #{g['game_id']} • {format_game_date(g['game_dt'])} • {format_dt(g['game_dt'])}</h4>
+                <p><strong>{g['home']}</strong> vs <strong>{g['away']}</strong></p>
+                <p>{g['site']}</p>
+                <p>{g['position']} • {g['sport_level']} • Fee {format_currency(g['fee'])} • {g['status']}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button(f"Activate #{g['game_id']}", key=f"activate_{g['game_id']}", use_container_width=True):
+                set_selected_game(g["game_id"])
+                st.success(f"Game #{g['game_id']} is now active.")
+        with c2:
+            if st.button(f"Open Game Day #{g['game_id']}", key=f"open_gameday_{g['game_id']}", use_container_width=True):
+                set_selected_game(g["game_id"])
+                st.session_state.page = "Game Day"
 
 
 def render_schedule():
@@ -680,7 +980,6 @@ def render_schedule():
 
     render_schedule_cards(filtered[:10])
 
-
 # =========================================================
 # COVERAGE ENGINE
 # =========================================================
@@ -688,59 +987,58 @@ def render_coverage_engine(game):
     candidates = get_coverage_candidates(game)
     top_candidate = candidates[0] if candidates else None
 
-    if top_candidate:
-        st.markdown(
-            f"""
-            <div class="card agent-warning">
-                <h4>Coverage Agent</h4>
-                <p><strong>Top replacement: {top_candidate['name']}</strong></p>
-                <p>{top_candidate['availability']} • {top_candidate['distance_miles']} miles • fit score {top_candidate['fit_score']}</p>
-                <p>{top_candidate['notes']}</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        candidate_df = pd.DataFrame([
-            {
-                "Official": c["name"],
-                "Availability": c["availability"],
-                "Miles": c["distance_miles"],
-                "Fit Score": c["fit_score"],
-                "Role Skill": c["role_skill_used"],
-                "Reliability": c["reliability"],
-                "Cert": c["cert"],
-                "Urgency": c["urgency"],
-            }
-            for c in candidates
-        ])
-        st.dataframe(candidate_df, use_container_width=True, hide_index=True)
-
-        option_map = {
-            f"{c['name']} • fit {c['fit_score']} • {c['availability']} • {c['distance_miles']} mi": c["name"]
-            for c in candidates
-        }
-        selected_label = st.selectbox("Select replacement option", list(option_map.keys()), key="coverage_choice")
-        selected_name = option_map[selected_label]
-        selected_candidate = next(c for c in candidates if c["name"] == selected_name)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("Mark as Recommended", key="recommend_coverage", use_container_width=True):
-                st.session_state.coverage_selected_official = selected_candidate["name"]
-                st.success(f"{selected_candidate['name']} marked as recommended replacement.")
-        with c2:
-            if st.button("Draft Assignor Message", key="draft_assignor_message", use_container_width=True):
-                st.session_state.coverage_selected_official = selected_candidate["name"]
-                st.info("Assignor draft generated below.")
-
-        if st.session_state.coverage_selected_official == selected_candidate["name"]:
-            st.markdown("### Assignor Draft")
-            st.code(build_assignor_message(game, selected_candidate), language="text")
-
-    else:
+    if not top_candidate:
         st.error("No available coverage candidates found in the current pool.")
+        return
 
+    st.markdown(
+        f"""
+        <div class="card agent-warning">
+            <h4>Coverage Agent</h4>
+            <p><strong>Top replacement: {top_candidate['name']}</strong></p>
+            <p>{top_candidate['availability']} • {top_candidate['distance_miles']} miles • fit score {top_candidate['fit_score']}</p>
+            <p>{top_candidate['notes']}</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    candidate_df = pd.DataFrame([
+        {
+            "Official": c["name"],
+            "Availability": c["availability"],
+            "Miles": c["distance_miles"],
+            "Fit Score": c["fit_score"],
+            "Role Skill": c["role_skill_used"],
+            "Reliability": c["reliability"],
+            "Cert": c["cert"],
+            "Urgency": c["urgency"],
+        }
+        for c in candidates
+    ])
+    st.dataframe(candidate_df, use_container_width=True, hide_index=True)
+
+    option_map = {
+        f"{c['name']} • fit {c['fit_score']} • {c['availability']} • {c['distance_miles']} mi": c["name"]
+        for c in candidates
+    }
+    selected_label = st.selectbox("Select replacement option", list(option_map.keys()), key="coverage_choice")
+    selected_name = option_map[selected_label]
+    selected_candidate = next(c for c in candidates if c["name"] == selected_name)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Mark as Recommended", key="recommend_coverage", use_container_width=True):
+            st.session_state.coverage_selected_official = selected_candidate["name"]
+            st.success(f"{selected_candidate['name']} marked as recommended replacement.")
+    with c2:
+        if st.button("Draft Assignor Message", key="draft_assignor_message", use_container_width=True):
+            st.session_state.coverage_selected_official = selected_candidate["name"]
+            st.info("Assignor draft generated below.")
+
+    if st.session_state.coverage_selected_official == selected_candidate["name"]:
+        st.markdown("### Assignor Draft")
+        st.code(build_assignor_message(game, selected_candidate), language="text")
 
 # =========================================================
 # GAME DAY
@@ -765,10 +1063,7 @@ def render_game_day():
 
     selected_limit = st.session_state["game_limit"]
     selected_minutes = limits[selected_limit]
-    plate_status_text, _ = get_plate_status(
-        plate_meeting_countdown,
-        st.session_state.checked_in
-    )
+    plate_status_text, _ = get_plate_status(plate_meeting_countdown, st.session_state.checked_in)
     ops_note = get_ops_note(game, plate_meeting_countdown, selected_minutes)
 
     st.subheader("Game Day Mode")
@@ -916,6 +1211,12 @@ def render_game_day():
                 st.metric("Elapsed", format_td(elapsed))
             with mc2:
                 st.metric("Remaining", format_td(remaining))
+        else:
+            mc1, mc2 = st.columns(2)
+            with mc1:
+                st.metric("Elapsed", "00:00")
+            with mc2:
+                st.metric("Remaining", f"{limits[st.session_state['game_limit']]}:00")
 
     elif panel == "weather":
         st.markdown("### Weather Control")
@@ -923,12 +1224,15 @@ def render_game_day():
         with wc1:
             if st.button("Clear", key="weather_clear_btn", use_container_width=True):
                 st.session_state.weather_status = "clear"
+                st.session_state.last_action = "Weather set to Clear"
         with wc2:
             if st.button("Caution", key="weather_caution_btn", use_container_width=True):
                 st.session_state.weather_status = "caution"
+                st.session_state.last_action = "Weather set to Caution"
         with wc3:
             if st.button("Lightning", key="weather_lightning_btn", use_container_width=True):
                 st.session_state.weather_status = "lightning"
+                st.session_state.last_action = "Weather set to Lightning"
 
         st.info(f"Manual weather mode set to: {st.session_state.weather_status.title()}")
 
@@ -937,9 +1241,11 @@ def render_game_day():
         if st.button("🚨 Alert Assignor", key="alert_assignor_btn", use_container_width=True):
             st.session_state.emergency_triggered = True
             st.error("Assignor emergency alert triggered.")
+            st.session_state.last_action = "Emergency alert sent to assignor"
         if st.button("📝 Open Incident Report", key="open_incident_btn", use_container_width=True):
             st.session_state.incident_started = True
             st.success("Incident workflow opened.")
+            st.session_state.last_action = "Incident report workflow opened"
 
     elif panel == "sub":
         st.markdown("### Substitute Coverage")
@@ -950,9 +1256,10 @@ def render_game_day():
         st.write(f"Navigate to: **{game['site']}**")
         if st.button("📍 Open Field Navigation", key="open_nav_btn", use_container_width=True):
             st.success("Preferred parking and route workflow opened.")
+            st.session_state.last_action = "Field navigation opened"
         if st.button("🧭 View Arrival Notes", key="arrival_notes_btn", use_container_width=True):
             st.info("Arrival note: park behind first-base side concessions and walk to plate area.")
-
+            st.session_state.last_action = "Arrival notes opened"
 
 # =========================================================
 # REPORTS
@@ -985,7 +1292,6 @@ def render_reports():
             f"During the assignment, an incident categorized as '{incident_type}' was observed. "
             f"Initial notes: {notes if notes else '[no notes entered]'}"
         )
-
 
 # =========================================================
 # APP RENDER
