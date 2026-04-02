@@ -124,6 +124,10 @@ def format_td(td):
     return f"{minutes:02}:{seconds:02}"
 
 
+def short_site(site):
+    return site.split(",")[0].strip() if "," in site else site.strip()
+
+
 def get_selected_game():
     if not assignments:
         return None
@@ -469,7 +473,7 @@ def build_live_feed_items():
         f"🌤 Weather: {weather_title} • {weather_detail}",
         "📣 Org Note: SBUO reminder — clean hat, polished shoes, strong plate presence",
         "📖 NFHS Update: obstruction / interference communication remains a point of emphasis",
-        f"🧢 Next Assignment: Game #{next_game['game_id']} • {format_game_date(next_game['game_dt'])} • {format_dt(next_game['game_dt'])}",
+        f"🧢 Next Assignment: Game #{next_game['game_id']} • {short_site(next_game['site'])} • {format_game_date(next_game['game_dt'])} • {format_dt(next_game['game_dt'])}",
         f"⏳ Countdown: {get_next_game_countdown_text()}",
         f"💰 Fee Board: {len(assignments)} games loaded • total fees {format_currency(total_fees)}",
         f"📍 Coverage Status: {get_coverage_status()}",
@@ -523,6 +527,10 @@ st.markdown("""
     padding: 16px;
     margin-bottom: 12px;
     box-shadow: 0 10px 26px rgba(0,0,0,.18);
+}
+.card.compact {
+    padding: 10px 12px;
+    margin-bottom: 8px;
 }
 .topbar {
     background: linear-gradient(115deg, #0A1726 0%, #102338 50%, #16395E 78%, #19334F 100%);
@@ -578,6 +586,30 @@ div[data-testid="stMetricValue"] {
 .small-muted {
     color: #B8C7D8;
     font-size: .88rem;
+}
+.mini-note {
+    color: #D9E4F0;
+    font-size: .86rem;
+    line-height: 1.25;
+}
+.compact-list-item {
+    background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+    border: 1px solid rgba(155,178,205,0.12);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+}
+.compact-title {
+    color: #FFF;
+    font-size: .91rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+.compact-sub {
+    color: #C7D6E8;
+    font-size: .82rem;
+    margin-top: 3px;
+    line-height: 1.2;
 }
 
 /* Command Center Header */
@@ -761,7 +793,7 @@ def render_topbar():
 def render_dashboard():
     today_games, next_game, total_fees, plate_count, base_count = get_dashboard_metrics(assignments)
     schedule_note = get_schedule_agent_note(assignments)
-    pattern_notes = analyze_schedule_patterns(assignments)[:5]
+    pattern_notes = analyze_schedule_patterns(assignments)[:4]
     weather_title, weather_detail = get_weather_summary()
 
     live_items = build_live_feed_items()
@@ -839,15 +871,14 @@ def render_dashboard():
         unsafe_allow_html=True
     )
 
-    left, right = st.columns([1.25, 1])
+    left, right = st.columns([1.35, 0.95])
 
     with left:
         st.markdown(
             f"""
-            <div class="card agent-{schedule_note['level']}">
+            <div class="card agent-{schedule_note['level']} compact">
                 <h4>Schedule Agent</h4>
-                <p><strong>{schedule_note['title']}</strong></p>
-                <p>{schedule_note['message']}</p>
+                <p class="mini-note"><strong>{schedule_note['title']}</strong> — {schedule_note['message']}</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -855,12 +886,11 @@ def render_dashboard():
 
         st.markdown(
             f"""
-            <div class="card">
+            <div class="card compact">
                 <h4>Primary Assignment Focus</h4>
-                <p><strong>Game #{next_game['game_id']}</strong> • {next_game['position']}</p>
-                <p>{next_game['home']} vs {next_game['away']}</p>
-                <p>{next_game['site']}</p>
-                <p>{format_game_date(next_game['game_dt'])} • {format_dt(next_game['game_dt'])} • Fee {format_currency(next_game['fee'])}</p>
+                <p class="mini-note"><strong>Game #{next_game['game_id']}</strong> • {next_game['position']} • {short_site(next_game['site'])}</p>
+                <p class="mini-note">{next_game['home']} vs {next_game['away']}</p>
+                <p class="mini-note">{format_game_date(next_game['game_dt'])} • {format_dt(next_game['game_dt'])} • Fee {format_currency(next_game['fee'])}</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -869,17 +899,21 @@ def render_dashboard():
         st.markdown("### Quick Actions")
         q1, q2, q3, q4 = st.columns(4)
         with q1:
-            if st.button(f"Launch Game #{next_game['game_id']}", key="dash_launch_game", use_container_width=True):
+            if st.button(
+                f"Launch {short_site(next_game['site'])}",
+                key="dash_launch_game",
+                use_container_width=True
+            ):
                 set_selected_game(next_game["game_id"])
                 st.session_state.page = "Game Day"
         with q2:
-            if st.button("Open Full Schedule", key="dash_open_schedule", use_container_width=True):
+            if st.button("Full Schedule", key="dash_open_schedule", use_container_width=True):
                 st.session_state.page = "My Schedule"
         with q3:
-            if st.button("Open Reports", key="dash_open_reports", use_container_width=True):
+            if st.button("Reports", key="dash_open_reports", use_container_width=True):
                 st.session_state.page = "Reports"
         with q4:
-            if st.button("Activate Next Game", key="dash_activate_next", use_container_width=True):
+            if st.button("Activate Game", key="dash_activate_next", use_container_width=True):
                 set_selected_game(next_game["game_id"])
                 st.success(f"Game #{next_game['game_id']} is now active.")
 
@@ -891,20 +925,20 @@ def render_dashboard():
             st.link_button("Open WNYT Weather", WNYT_WEATHER_URL, use_container_width=True)
 
         st.markdown("### Upcoming Assignments")
-        for g in sorted(assignments, key=lambda x: x["game_dt"])[:6]:
-            c1, c2 = st.columns([4, 1])
-            with c1:
+        for g in sorted(assignments, key=lambda x: x["game_dt"])[:4]:
+            row1, row2 = st.columns([5, 1])
+            with row1:
                 st.markdown(
                     f"""
-                    <div class="card">
-                        <p><strong>Game #{g['game_id']}</strong> • {format_game_date(g['game_dt'])} • {format_dt(g['game_dt'])} • {g['position']}</p>
-                        <p>{g['home']} vs {g['away']}</p>
-                        <p>{g['site']}</p>
+                    <div class="compact-list-item">
+                        <div class="compact-title">#{g['game_id']} • {format_game_date(g['game_dt'])} • {format_dt(g['game_dt'])} • {g['position']}</div>
+                        <div class="compact-sub">{g['home']} vs {g['away']}</div>
+                        <div class="compact-sub">{short_site(g['site'])}</div>
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
-            with c2:
+            with row2:
                 if st.button("Use", key=f"use_game_{g['game_id']}", use_container_width=True):
                     set_selected_game(g["game_id"])
                     st.session_state.page = "Game Day"
@@ -912,33 +946,35 @@ def render_dashboard():
     with right:
         st.markdown(
             f"""
-            <div class="card">
+            <div class="card compact">
                 <h4>Weather + Alert Status</h4>
-                <p><strong>{weather_title}</strong></p>
-                <p>{weather_detail}</p>
-                <p>Last action: {st.session_state.last_action}</p>
+                <p class="mini-note"><strong>{weather_title}</strong> — {weather_detail}</p>
+                <p class="mini-note"><strong>Last action:</strong> {st.session_state.last_action}</p>
+                <p class="mini-note"><strong>Countdown:</strong> {get_next_game_countdown_text()}</p>
             </div>
             """,
             unsafe_allow_html=True
         )
 
-        st.markdown('<div class="card"><h4>Schedule Signals</h4>', unsafe_allow_html=True)
+        st.markdown('<div class="card compact"><h4>Schedule Signals</h4>', unsafe_allow_html=True)
         if pattern_notes:
             for note in pattern_notes:
-                st.write(f"**{note['title']}** — {note['message']}")
+                st.markdown(
+                    f"<p class='mini-note'><strong>{note['title']}</strong> — {note['message']}</p>",
+                    unsafe_allow_html=True
+                )
         else:
-            st.write("No schedule pattern issues detected.")
+            st.markdown("<p class='mini-note'>No schedule pattern issues detected.</p>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown(
             f"""
-            <div class="card">
+            <div class="card compact">
                 <h4>Operations Snapshot</h4>
-                <p><strong>Coverage:</strong> {get_coverage_status()}</p>
-                <p><strong>Check-In State:</strong> {get_checkin_text()}</p>
-                <p><strong>NFHS Pulse:</strong> Obstruction / interference communication emphasis</p>
-                <p><strong>Org Pulse:</strong> Professional appearance and strong pregame presence</p>
-                <p><strong>Countdown:</strong> {get_next_game_countdown_text()}</p>
+                <p class="mini-note"><strong>Coverage:</strong> {get_coverage_status()}</p>
+                <p class="mini-note"><strong>Check-In:</strong> {get_checkin_text()}</p>
+                <p class="mini-note"><strong>NFHS Pulse:</strong> Obstruction / interference communication emphasis</p>
+                <p class="mini-note"><strong>Org Pulse:</strong> Professional appearance and strong pregame presence</p>
             </div>
             """,
             unsafe_allow_html=True
