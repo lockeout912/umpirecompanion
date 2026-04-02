@@ -38,6 +38,7 @@ defaults = {
     "crew_chief_contacted": False,
     "last_action": "System ready",
     "coverage_selected_official": None,
+    "incident_generated_text": "",
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -72,7 +73,6 @@ def load_assignments():
         {"game_id": 579, "date": "2026-05-17", "time": "15:00", "position": "Plate", "sport_level": "SBUO Summer Baseball, 12U 6 Inn POF", "site": "Michigan Ave Park, Baseball Diamond", "home": "Schenectady Blue Jays White 10U", "away": "N Colonie Blue 10U", "fee": 75.00, "status": "Accepted", "accepted_on": "2026-03-29"},
         {"game_id": 580, "date": "2026-05-17", "time": "17:30", "position": "Plate", "sport_level": "SBUO Summer Baseball, 12U 6 Inn POF", "site": "Michigan Ave Park, Baseball Diamond", "home": "Schenectady Blue Jays Blue 10U", "away": "Saratoga-Wilton White 10U", "fee": 75.00, "status": "Accepted", "accepted_on": "2026-03-29"},
     ]
-
     for row in raw:
         row["game_dt"] = datetime.strptime(f"{row['date']} {row['time']}", "%Y-%m-%d %H:%M")
     return raw
@@ -121,14 +121,11 @@ def format_td(td):
 def get_selected_game():
     if not assignments:
         return None
-
     if st.session_state.selected_game_id is not None:
         for game in assignments:
             if game["game_id"] == st.session_state.selected_game_id:
                 return game
-
-    upcoming = sorted(assignments, key=lambda x: x["game_dt"])
-    return upcoming[0]
+    return sorted(assignments, key=lambda x: x["game_dt"])[0]
 
 
 def set_selected_game(game_id):
@@ -231,7 +228,6 @@ def analyze_schedule_patterns(data):
                         "title": f"Tight Turnaround on {game_date}",
                         "message": f"Games #{current_game['game_id']} and #{next_game['game_id']} are only {gap_minutes} minutes apart at different sites."
                     })
-
     return issues
 
 
@@ -308,6 +304,36 @@ def get_clock_status(selected_minutes):
             return "Final 15 minutes"
         return "Clock running"
     return "Clock not started"
+
+
+def get_weather_summary():
+    if st.session_state.weather_status == "lightning":
+        return ("Lightning Alert", "Suspend play / clear field")
+    if st.session_state.weather_status == "caution":
+        return ("Weather Caution", "Monitor radar")
+    return ("Clear / Playable", "No lightning risk")
+
+
+def get_coverage_status():
+    if st.session_state.coverage_selected_official:
+        return f"Recommended: {st.session_state.coverage_selected_official}"
+    if st.session_state.sub_assignor_notified:
+        return "Assignor notified of coverage risk"
+    if st.session_state.sub_scan_done:
+        return "Replacement scan completed"
+    return "No active coverage issue"
+
+
+def get_next_game_countdown_text():
+    _, next_game, _, _, _ = get_dashboard_metrics(assignments)
+    delta = next_game["game_dt"] - datetime.now()
+    if delta.total_seconds() <= 0:
+        return f"Game #{next_game['game_id']} is in the past / underway window"
+    hours = int(delta.total_seconds() // 3600)
+    minutes = int((delta.total_seconds() % 3600) // 60)
+    if hours > 0:
+        return f"Next game in {hours}h {minutes}m"
+    return f"Next game in {minutes}m"
 
 
 def get_ops_note(game, plate_meeting_countdown, selected_minutes):
@@ -410,40 +436,58 @@ def build_assignor_message(game, candidate):
     )
 
 
-def get_weather_summary():
-    if st.session_state.weather_status == "lightning":
-        return ("Lightning Alert", "Suspend play / clear field")
-    if st.session_state.weather_status == "caution":
-        return ("Weather Caution", "Monitor radar")
-    return ("Clear / Playable", "No lightning risk")
-
-
-def get_coverage_status():
-    if st.session_state.coverage_selected_official:
-        return f"Recommended: {st.session_state.coverage_selected_official}"
-    if st.session_state.sub_assignor_notified:
-        return "Assignor notified of coverage risk"
-    if st.session_state.sub_scan_done:
-        return "Replacement scan completed"
-    return "No active coverage issue"
+def build_incident_report(game, incident_type, severity, inning, notes):
+    return (
+        f"Incident Report Draft\n\n"
+        f"Game #{game['game_id']} — {game['home']} vs {game['away']}\n"
+        f"Date: {format_game_date(game['game_dt'])}\n"
+        f"Time: {format_dt(game['game_dt'])}\n"
+        f"Site: {game['site']}\n"
+        f"Position Worked: {game['position']}\n"
+        f"Incident Type: {incident_type}\n"
+        f"Severity: {severity}\n"
+        f"Inning / Timeframe: {inning}\n\n"
+        f"Summary:\n{notes if notes else '[No notes entered]'}\n\n"
+        f"Recommended follow-up: review with assignor / board leadership and retain for organizational record."
+    )
 
 
 def build_live_feed_items():
     _, next_game, total_fees, plate_count, base_count = get_dashboard_metrics(assignments)
     weather_title, weather_detail = get_weather_summary()
     schedule_note = get_schedule_agent_note(assignments)
+    pattern_notes = analyze_schedule_patterns(assignments)
+    selected_game = get_selected_game()
 
-    return [
+    items = [
         f"🌤 Weather: {weather_title} • {weather_detail}",
         "📣 Org Note: SBUO reminder — clean hat, polished shoes, strong plate presence",
         "📖 NFHS Update: obstruction / interference communication remains a point of emphasis",
         f"🧢 Next Assignment: Game #{next_game['game_id']} • {format_game_date(next_game['game_dt'])} • {format_dt(next_game['game_dt'])}",
+        f"⏳ Countdown: {get_next_game_countdown_text()}",
         f"💰 Fee Board: {len(assignments)} games loaded • total fees {format_currency(total_fees)}",
         f"📍 Coverage Status: {get_coverage_status()}",
-        f"🎯 Schedule Agent: {get_schedule_agent_note(assignments)['title']}",
+        f"🎯 Schedule Agent: {schedule_note['title']}",
         f"⚾ Role Split: Plate {plate_count} • Base {base_count}",
         f"✅ Last Action: {st.session_state.last_action}",
     ]
+
+    if pattern_notes:
+        items.append(f"🚦 Ops Signal: {pattern_notes[0]['title']}")
+
+    if selected_game:
+        items.append(f"🗂 Active Game: #{selected_game['game_id']} • {selected_game['home']} vs {selected_game['away']}")
+
+    if st.session_state.checked_in:
+        items.append(f"✅ Check-In Live: {get_checkin_text()}")
+
+    if st.session_state.game_started:
+        items.append("⏱ Game Clock Active")
+
+    if st.session_state.emergency_triggered:
+        items.append("🚨 Emergency workflow has been triggered")
+
+    return items
 
 
 limits = {"1:45": 105, "2:00": 120, "2:10": 130}
@@ -611,7 +655,7 @@ div[data-testid="stMetricValue"] {
     display: flex;
     width: max-content;
     white-space: nowrap;
-    animation: ticker-scroll 75s linear infinite;
+    animation: ticker-scroll 80s linear infinite;
     will-change: transform;
 }
 .ticker-content {
@@ -817,7 +861,7 @@ def render_dashboard():
         )
 
         st.markdown("### Quick Actions")
-        q1, q2, q3 = st.columns(3)
+        q1, q2, q3, q4 = st.columns(4)
         with q1:
             if st.button(f"Launch Game #{next_game['game_id']}", key="dash_launch_game", use_container_width=True):
                 set_selected_game(next_game["game_id"])
@@ -828,19 +872,29 @@ def render_dashboard():
         with q3:
             if st.button("Open Reports", key="dash_open_reports", use_container_width=True):
                 st.session_state.page = "Reports"
+        with q4:
+            if st.button("Activate Next Game", key="dash_activate_next", use_container_width=True):
+                set_selected_game(next_game["game_id"])
+                st.success(f"Game #{next_game['game_id']} is now active.")
 
         st.markdown("### Upcoming Assignments")
         for g in sorted(assignments, key=lambda x: x["game_dt"])[:6]:
-            st.markdown(
-                f"""
-                <div class="card">
-                    <p><strong>Game #{g['game_id']}</strong> • {format_game_date(g['game_dt'])} • {format_dt(g['game_dt'])} • {g['position']}</p>
-                    <p>{g['home']} vs {g['away']}</p>
-                    <p>{g['site']}</p>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+            c1, c2 = st.columns([4, 1])
+            with c1:
+                st.markdown(
+                    f"""
+                    <div class="card">
+                        <p><strong>Game #{g['game_id']}</strong> • {format_game_date(g['game_dt'])} • {format_dt(g['game_dt'])} • {g['position']}</p>
+                        <p>{g['home']} vs {g['away']}</p>
+                        <p>{g['site']}</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            with c2:
+                if st.button("Use", key=f"use_game_{g['game_id']}", use_container_width=True):
+                    set_selected_game(g["game_id"])
+                    st.session_state.page = "Game Day"
 
     with right:
         st.markdown(
@@ -871,6 +925,7 @@ def render_dashboard():
                 <p><strong>Check-In State:</strong> {get_checkin_text()}</p>
                 <p><strong>NFHS Pulse:</strong> Obstruction / interference communication emphasis</p>
                 <p><strong>Org Pulse:</strong> Professional appearance and strong pregame presence</p>
+                <p><strong>Countdown:</strong> {get_next_game_countdown_text()}</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -1026,19 +1081,76 @@ def render_coverage_engine(game):
     selected_name = option_map[selected_label]
     selected_candidate = next(c for c in candidates if c["name"] == selected_name)
 
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns(3)
     with c1:
         if st.button("Mark as Recommended", key="recommend_coverage", use_container_width=True):
             st.session_state.coverage_selected_official = selected_candidate["name"]
+            st.session_state.last_action = f"Coverage recommendation set to {selected_candidate['name']}"
             st.success(f"{selected_candidate['name']} marked as recommended replacement.")
     with c2:
         if st.button("Draft Assignor Message", key="draft_assignor_message", use_container_width=True):
             st.session_state.coverage_selected_official = selected_candidate["name"]
+            st.session_state.sub_assignor_notified = True
+            st.session_state.last_action = "Assignor coverage draft generated"
             st.info("Assignor draft generated below.")
+    with c3:
+        if st.button("Scan Again", key="scan_again_coverage", use_container_width=True):
+            st.session_state.sub_scan_done = True
+            st.session_state.last_action = "Coverage scan refreshed"
+            st.success("Coverage scan refreshed.")
 
     if st.session_state.coverage_selected_official == selected_candidate["name"]:
         st.markdown("### Assignor Draft")
         st.code(build_assignor_message(game, selected_candidate), language="text")
+
+# =========================================================
+# INCIDENT ENGINE
+# =========================================================
+def render_incident_engine(game):
+    st.markdown(
+        """
+        <div class="card agent-warning">
+            <h4>Incident Agent</h4>
+            <p>Convert rough notes into a cleaner assignor-ready report.</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        incident_type = st.selectbox(
+            "Incident Type",
+            ["Coach Conduct", "Fan Conduct", "Ejection", "Field Safety", "Payment Issue", "Other"],
+            key="incident_type_gd"
+        )
+    with c2:
+        severity = st.selectbox(
+            "Severity",
+            ["Low", "Moderate", "High"],
+            key="incident_severity_gd"
+        )
+    with c3:
+        inning = st.text_input(
+            "Inning / Timeframe",
+            placeholder="Top 4th, pregame, postgame...",
+            key="incident_inning_gd"
+        )
+
+    notes = st.text_area(
+        "Incident Notes",
+        height=170,
+        placeholder="Describe what happened, who was involved, and what action was taken...",
+        key="incident_notes_gd"
+    )
+
+    if st.button("Generate Incident Draft", key="generate_incident_draft_gd", use_container_width=True):
+        st.session_state.incident_generated_text = build_incident_report(game, incident_type, severity, inning, notes)
+        st.session_state.last_action = "Incident draft generated"
+
+    if st.session_state.incident_generated_text:
+        st.markdown("### Incident Draft")
+        st.code(st.session_state.incident_generated_text, language="text")
 
 # =========================================================
 # GAME DAY
@@ -1151,7 +1263,7 @@ def render_game_day():
         if st.button("🌩 Weather", key="gd_weather", use_container_width=True):
             st.session_state.active_panel = "weather"
 
-    r2c1, r2c2, r2c3 = st.columns(3)
+    r2c1, r2c2, r2c3, r2c4 = st.columns(4)
     with r2c1:
         if st.button("🚨 Emergency", key="gd_emergency", use_container_width=True):
             st.session_state.active_panel = "emergency"
@@ -1161,6 +1273,9 @@ def render_game_day():
     with r2c3:
         if st.button("📍 Navigate", key="gd_nav", use_container_width=True):
             st.session_state.active_panel = "nav"
+    with r2c4:
+        if st.button("📝 Incident", key="gd_incident", use_container_width=True):
+            st.session_state.active_panel = "incident"
 
     panel = st.session_state.active_panel
 
@@ -1234,18 +1349,22 @@ def render_game_day():
                 st.session_state.weather_status = "lightning"
                 st.session_state.last_action = "Weather set to Lightning"
 
-        st.info(f"Manual weather mode set to: {st.session_state.weather_status.title()}")
+        wt, wd = get_weather_summary()
+        st.info(f"{wt}: {wd}")
 
     elif panel == "emergency":
         st.markdown("### Emergency Workflow")
-        if st.button("🚨 Alert Assignor", key="alert_assignor_btn", use_container_width=True):
-            st.session_state.emergency_triggered = True
-            st.error("Assignor emergency alert triggered.")
-            st.session_state.last_action = "Emergency alert sent to assignor"
-        if st.button("📝 Open Incident Report", key="open_incident_btn", use_container_width=True):
-            st.session_state.incident_started = True
-            st.success("Incident workflow opened.")
-            st.session_state.last_action = "Incident report workflow opened"
+        e1, e2 = st.columns(2)
+        with e1:
+            if st.button("🚨 Alert Assignor", key="alert_assignor_btn", use_container_width=True):
+                st.session_state.emergency_triggered = True
+                st.session_state.last_action = "Emergency alert sent to assignor"
+                st.error("Assignor emergency alert triggered.")
+        with e2:
+            if st.button("📞 Contact Crew Chief", key="contact_crew_chief_btn", use_container_width=True):
+                st.session_state.crew_chief_contacted = True
+                st.session_state.last_action = "Crew chief contact initiated"
+                st.success("Crew chief contact lane opened.")
 
     elif panel == "sub":
         st.markdown("### Substitute Coverage")
@@ -1254,12 +1373,21 @@ def render_game_day():
     elif panel == "nav":
         st.markdown("### Navigation + Arrival")
         st.write(f"Navigate to: **{game['site']}**")
-        if st.button("📍 Open Field Navigation", key="open_nav_btn", use_container_width=True):
-            st.success("Preferred parking and route workflow opened.")
-            st.session_state.last_action = "Field navigation opened"
-        if st.button("🧭 View Arrival Notes", key="arrival_notes_btn", use_container_width=True):
-            st.info("Arrival note: park behind first-base side concessions and walk to plate area.")
-            st.session_state.last_action = "Arrival notes opened"
+        n1, n2 = st.columns(2)
+        with n1:
+            if st.button("📍 Open Field Navigation", key="open_nav_btn", use_container_width=True):
+                st.session_state.nav_opened = True
+                st.session_state.last_action = "Field navigation opened"
+                st.success("Preferred parking and route workflow opened.")
+        with n2:
+            if st.button("🧭 View Arrival Notes", key="arrival_notes_btn", use_container_width=True):
+                st.session_state.nav_notes_opened = True
+                st.session_state.last_action = "Arrival notes opened"
+                st.info("Arrival note: park behind first-base side concessions and walk to plate area.")
+
+    elif panel == "incident":
+        st.markdown("### Incident Workflow")
+        render_incident_engine(game)
 
 # =========================================================
 # REPORTS
@@ -1267,31 +1395,23 @@ def render_game_day():
 def render_reports():
     st.subheader("Reports + Logs")
 
-    st.markdown(
-        """
-        <div class="card">
-            <h4>Incident Agent</h4>
-            <p>Future lane: convert rough notes into polished, assignor-ready incident reports.</p>
-            <p>Next implementation target: abuse / ejection / field issue templates with timestamps and export.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    incident_type = st.selectbox(
-        "Report Type",
-        ["Coach Conduct", "Fan Conduct", "Ejection", "Field Safety", "Payment Issue", "Other"],
-        key="report_type"
-    )
-    notes = st.text_area("Notes", height=180, placeholder="Describe exactly what happened...", key="report_notes")
-
-    if st.button("Generate Draft Report", key="generate_report", use_container_width=True):
-        st.success(f"{incident_type} draft report generated.")
-        st.write("**Draft Summary**")
-        st.write(
-            f"During the assignment, an incident categorized as '{incident_type}' was observed. "
-            f"Initial notes: {notes if notes else '[no notes entered]'}"
+    game = get_selected_game()
+    if game:
+        st.markdown(
+            f"""
+            <div class="card">
+                <h4>Active Context</h4>
+                <p>Game #{game['game_id']} • {game['home']} vs {game['away']}</p>
+                <p>{game['site']} • {format_game_date(game['game_dt'])} • {format_dt(game['game_dt'])}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
         )
+
+    if game:
+        render_incident_engine(game)
+    else:
+        st.info("No game is active right now. Select a game first.")
 
 # =========================================================
 # APP RENDER
