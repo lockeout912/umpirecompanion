@@ -524,13 +524,13 @@ st.markdown("""
     background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
     border: 1px solid rgba(155,178,205,0.16);
     border-radius: 16px;
-    padding: 16px;
-    margin-bottom: 12px;
-    box-shadow: 0 10px 26px rgba(0,0,0,.18);
+    padding: 13px 14px;
+    margin-bottom: 10px;
+    box-shadow: 0 8px 20px rgba(0,0,0,.16);
 }
 .card.compact {
-    padding: 10px 12px;
-    margin-bottom: 8px;
+    padding: 9px 11px;
+    margin-bottom: 7px;
 }
 .topbar {
     background: linear-gradient(115deg, #0A1726 0%, #102338 50%, #16395E 78%, #19334F 100%);
@@ -582,6 +582,9 @@ div[data-testid="stMetricValue"] {
     width: 100%;
     border-radius: 12px;
     font-weight: 800;
+    min-height: 42px;
+    padding-top: 0.45rem;
+    padding-bottom: 0.45rem;
 }
 .small-muted {
     color: #B8C7D8;
@@ -793,7 +796,7 @@ def render_topbar():
 def render_dashboard():
     today_games, next_game, total_fees, plate_count, base_count = get_dashboard_metrics(assignments)
     schedule_note = get_schedule_agent_note(assignments)
-    pattern_notes = analyze_schedule_patterns(assignments)[:4]
+    pattern_notes = analyze_schedule_patterns(assignments)[:3]
     weather_title, weather_detail = get_weather_summary()
 
     live_items = build_live_feed_items()
@@ -871,7 +874,7 @@ def render_dashboard():
         unsafe_allow_html=True
     )
 
-    left, right = st.columns([1.35, 0.95])
+    left, right = st.columns([1.45, 0.85], gap="medium")
 
     with left:
         st.markdown(
@@ -900,7 +903,7 @@ def render_dashboard():
         q1, q2, q3, q4 = st.columns(4)
         with q1:
             if st.button(
-                f"Launch {short_site(next_game['site'])}",
+                f"Launch Game #{next_game['game_id']}",
                 key="dash_launch_game",
                 use_container_width=True
             ):
@@ -925,14 +928,14 @@ def render_dashboard():
             st.link_button("Open WNYT Weather", WNYT_WEATHER_URL, use_container_width=True)
 
         st.markdown("### Upcoming Assignments")
-        for g in sorted(assignments, key=lambda x: x["game_dt"])[:4]:
+        for g in sorted(assignments, key=lambda x: x["game_dt"])[:3]:
             row1, row2 = st.columns([5, 1])
             with row1:
                 st.markdown(
                     f"""
                     <div class="compact-list-item">
-                        <div class="compact-title">#{g['game_id']} • {format_game_date(g['game_dt'])} • {format_dt(g['game_dt'])} • {g['position']}</div>
-                        <div class="compact-sub">{g['home']} vs {g['away']}</div>
+                        <div class="compact-title">#{g['game_id']} • {format_game_date(g['game_dt'])} • {format_dt(g['game_dt'])}</div>
+                        <div class="compact-sub">{g['position']} • {g['home']} vs {g['away']}</div>
                         <div class="compact-sub">{short_site(g['site'])}</div>
                     </div>
                     """,
@@ -949,8 +952,8 @@ def render_dashboard():
             <div class="card compact">
                 <h4>Weather + Alert Status</h4>
                 <p class="mini-note"><strong>{weather_title}</strong> — {weather_detail}</p>
-                <p class="mini-note"><strong>Last action:</strong> {st.session_state.last_action}</p>
                 <p class="mini-note"><strong>Countdown:</strong> {get_next_game_countdown_text()}</p>
+                <p class="mini-note"><strong>Last action:</strong> {st.session_state.last_action}</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -1026,14 +1029,14 @@ def render_schedule_cards(filtered):
         st.info("No games match the current filters.")
         return
 
-    for g in filtered:
+    for g in filtered[:6]:
         st.markdown(
             f"""
-            <div class="card">
+            <div class="card compact">
                 <h4>Game #{g['game_id']} • {format_game_date(g['game_dt'])} • {format_dt(g['game_dt'])}</h4>
-                <p><strong>{g['home']}</strong> vs <strong>{g['away']}</strong></p>
-                <p>{g['site']}</p>
-                <p>{g['position']} • {g['sport_level']} • Fee {format_currency(g['fee'])} • {g['status']}</p>
+                <p class="mini-note"><strong>{g['home']}</strong> vs <strong>{g['away']}</strong></p>
+                <p class="mini-note">{short_site(g['site'])}</p>
+                <p class="mini-note">{g['position']} • Fee {format_currency(g['fee'])} • {g['status']}</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -1082,7 +1085,7 @@ def render_schedule():
         unsafe_allow_html=True
     )
 
-    render_schedule_cards(filtered[:10])
+    render_schedule_cards(filtered)
 
 # =========================================================
 # COVERAGE ENGINE
@@ -1268,11 +1271,11 @@ def render_game_day():
         unsafe_allow_html=True
     )
 
-    readiness_col1, readiness_col2 = st.columns(2)
+    readiness_col1, readiness_col2 = st.columns(2, gap="small")
     with readiness_col1:
         st.markdown(
             f"""
-            <div class="card">
+            <div class="card compact">
                 <h4>Readiness Strip</h4>
                 <p>Plate Conference: <strong>{format_dt(plate_meeting_time)}</strong></p>
                 <p>Status: <strong>{plate_status_text}</strong></p>
@@ -1285,7 +1288,7 @@ def render_game_day():
     with readiness_col2:
         st.markdown(
             f"""
-            <div class="card">
+            <div class="card compact">
                 <h4>Game Context</h4>
                 <p>Ruleset: <strong>{ruleset}</strong></p>
                 <p>Position: <strong>{game['position']}</strong></p>
@@ -1454,7 +1457,7 @@ def render_reports():
     if game:
         st.markdown(
             f"""
-            <div class="card">
+            <div class="card compact">
                 <h4>Active Context</h4>
                 <p>Game #{game['game_id']} • {game['home']} vs {game['away']}</p>
                 <p>{game['site']} • {format_game_date(game['game_dt'])} • {format_dt(game['game_dt'])}</p>
