@@ -10,6 +10,12 @@ st.set_page_config(
 )
 
 # =========================================================
+# CONSTANTS
+# =========================================================
+WNYT_RADAR_URL = "https://wnyt.com/radar/"
+WNYT_WEATHER_URL = "https://wnyt.com/weather/"
+
+# =========================================================
 # SESSION STATE
 # =========================================================
 defaults = {
@@ -877,6 +883,13 @@ def render_dashboard():
                 set_selected_game(next_game["game_id"])
                 st.success(f"Game #{next_game['game_id']} is now active.")
 
+        st.markdown("### Weather Tools")
+        wt1, wt2 = st.columns(2)
+        with wt1:
+            st.link_button("Open WNYT Radar", WNYT_RADAR_URL, use_container_width=True)
+        with wt2:
+            st.link_button("Open WNYT Weather", WNYT_WEATHER_URL, use_container_width=True)
+
         st.markdown("### Upcoming Assignments")
         for g in sorted(assignments, key=lambda x: x["game_dt"])[:6]:
             c1, c2 = st.columns([4, 1])
@@ -1351,6 +1364,12 @@ def render_game_day():
 
         wt, wd = get_weather_summary()
         st.info(f"{wt}: {wd}")
+
+        rw1, rw2 = st.columns(2)
+        with rw1:
+            st.link_button("Open WNYT Radar", WNYT_RADAR_URL, use_container_width=True)
+        with rw2:
+            st.link_button("Open WNYT Weather", WNYT_WEATHER_URL, use_container_width=True)
 
     elif panel == "emergency":
         st.markdown("### Emergency Workflow")
