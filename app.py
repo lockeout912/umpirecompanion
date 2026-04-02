@@ -532,6 +532,9 @@ st.markdown("""
     padding: 9px 11px;
     margin-bottom: 7px;
 }
+.card.section-card {
+    padding: 11px 12px;
+}
 .topbar {
     background: linear-gradient(115deg, #0A1726 0%, #102338 50%, #16395E 78%, #19334F 100%);
     border: 1px solid rgba(255,255,255,.09);
@@ -613,6 +616,14 @@ div[data-testid="stMetricValue"] {
     font-size: .82rem;
     margin-top: 3px;
     line-height: 1.2;
+}
+.panel-kicker {
+    color: #B4C5D7;
+    text-transform: uppercase;
+    letter-spacing: .13em;
+    font-size: .64rem;
+    font-weight: 800;
+    margin-bottom: 6px;
 }
 
 /* Command Center Header */
@@ -903,7 +914,7 @@ def render_dashboard():
         q1, q2, q3, q4 = st.columns(4)
         with q1:
             if st.button(
-                f"Launch Game #{next_game['game_id']}",
+                f"Launch Game #{next_game['game_id']} • {next_game['position']}",
                 key="dash_launch_game",
                 use_container_width=True
             ):
@@ -1100,11 +1111,11 @@ def render_coverage_engine(game):
 
     st.markdown(
         f"""
-        <div class="card agent-warning">
-            <h4>Coverage Agent</h4>
-            <p><strong>Top replacement: {top_candidate['name']}</strong></p>
-            <p>{top_candidate['availability']} • {top_candidate['distance_miles']} miles • fit score {top_candidate['fit_score']}</p>
-            <p>{top_candidate['notes']}</p>
+        <div class="card section-card agent-warning">
+            <div class="panel-kicker">Coverage Engine</div>
+            <h4>Top replacement: {top_candidate['name']}</h4>
+            <p class="mini-note">{top_candidate['availability']} • {top_candidate['distance_miles']} miles • fit score {top_candidate['fit_score']}</p>
+            <p class="mini-note">{top_candidate['notes']}</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -1161,9 +1172,10 @@ def render_coverage_engine(game):
 def render_incident_engine(game):
     st.markdown(
         """
-        <div class="card agent-warning">
-            <h4>Incident Agent</h4>
-            <p>Convert rough notes into a cleaner assignor-ready report.</p>
+        <div class="card section-card agent-warning">
+            <div class="panel-kicker">Incident Engine</div>
+            <h4>Build an assignor-ready incident draft</h4>
+            <p class="mini-note">Log the event once, then let the app structure it cleanly.</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -1191,7 +1203,7 @@ def render_incident_engine(game):
 
     notes = st.text_area(
         "Incident Notes",
-        height=170,
+        height=150,
         placeholder="Describe what happened, who was involved, and what action was taken...",
         key="incident_notes_gd"
     )
@@ -1234,12 +1246,13 @@ def render_game_day():
 
     st.markdown(
         f"""
-        <div class="card">
-            <h3>Active Assignment • Game #{game['game_id']}</h3>
-            <p><strong>{game['home']}</strong> vs <strong>{game['away']}</strong></p>
-            <p>{game['site']}</p>
-            <p>{format_game_date(game['game_dt'])} • {format_dt(game['game_dt'])} • {game['position']} • {ruleset}</p>
-            <p>Fee: {format_currency(game['fee'])} • Status: {game['status']} • Accepted On: {game['accepted_on']}</p>
+        <div class="card compact">
+            <div class="panel-kicker">Active Assignment</div>
+            <h3>Game #{game['game_id']} • {game['position']}</h3>
+            <p class="mini-note"><strong>{game['home']}</strong> vs <strong>{game['away']}</strong></p>
+            <p class="mini-note">{game['site']}</p>
+            <p class="mini-note">{format_game_date(game['game_dt'])} • {format_dt(game['game_dt'])} • {ruleset}</p>
+            <p class="mini-note">Fee: {format_currency(game['fee'])} • Status: {game['status']} • Accepted: {game['accepted_on']}</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -1261,11 +1274,11 @@ def render_game_day():
 
     st.markdown(
         f"""
-        <div class="card agent-{ops_note['level']}">
-            <h4>Game Day Ops Agent</h4>
-            <p><strong>{ops_note['title']}</strong></p>
-            <p>{ops_note['message']}</p>
-            <p><strong>Recommended action:</strong> {ops_note['action']}</p>
+        <div class="card compact agent-{ops_note['level']}">
+            <div class="panel-kicker">Game Day Ops Agent</div>
+            <h4>{ops_note['title']}</h4>
+            <p class="mini-note">{ops_note['message']}</p>
+            <p class="mini-note"><strong>Recommended action:</strong> {ops_note['action']}</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -1276,9 +1289,10 @@ def render_game_day():
         st.markdown(
             f"""
             <div class="card compact">
-                <h4>Readiness Strip</h4>
-                <p>Plate Conference: <strong>{format_dt(plate_meeting_time)}</strong></p>
-                <p>Status: <strong>{plate_status_text}</strong></p>
+                <div class="panel-kicker">Readiness Strip</div>
+                <h4>Pregame Timing</h4>
+                <p class="mini-note">Plate Conference: <strong>{format_dt(plate_meeting_time)}</strong></p>
+                <p class="mini-note">Status: <strong>{plate_status_text}</strong></p>
                 <p class="small-muted">That’s the clock that matters before the clock that matters.</p>
             </div>
             """,
@@ -1289,10 +1303,11 @@ def render_game_day():
         st.markdown(
             f"""
             <div class="card compact">
-                <h4>Game Context</h4>
-                <p>Ruleset: <strong>{ruleset}</strong></p>
-                <p>Position: <strong>{game['position']}</strong></p>
-                <p>Site: <strong>{game['site']}</strong></p>
+                <div class="panel-kicker">Game Context</div>
+                <h4>Assignment Details</h4>
+                <p class="mini-note">Ruleset: <strong>{ruleset}</strong></p>
+                <p class="mini-note">Position: <strong>{game['position']}</strong></p>
+                <p class="mini-note">Site: <strong>{short_site(game['site'])}</strong></p>
             </div>
             """,
             unsafe_allow_html=True
@@ -1332,7 +1347,15 @@ def render_game_day():
     panel = st.session_state.active_panel
 
     if panel == "rules":
-        st.markdown("### Rule Lookup")
+        st.markdown(
+            """
+            <div class="card section-card">
+                <div class="panel-kicker">Rules Engine</div>
+                <h4>Rule Lookup</h4>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         st.text_area(
             "Describe the play",
             "Runner on first, ground ball to shortstop. Fielder obstructs the runner.",
@@ -1346,15 +1369,25 @@ def render_game_day():
         if st.session_state.rule_result_visible:
             st.markdown(
                 f"""
-                <div class="card">
+                <div class="card compact">
+                    <div class="panel-kicker">Rule Result</div>
                     <h4>{st.session_state.rule_result_title}</h4>
-                    <p>{st.session_state.rule_result_text}</p>
+                    <p class="mini-note">{st.session_state.rule_result_text}</p>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
 
     elif panel == "clock":
+        st.markdown(
+            """
+            <div class="card section-card">
+                <div class="panel-kicker">Clock Engine</div>
+                <h4>Game Time Control</h4>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         st.selectbox("Game Time Limit", ["1:45", "2:00", "2:10"], key="game_limit")
 
         c1, c2 = st.columns(2)
@@ -1386,7 +1419,15 @@ def render_game_day():
                 st.metric("Remaining", f"{limits[st.session_state['game_limit']]}:00")
 
     elif panel == "weather":
-        st.markdown("### Weather Control")
+        st.markdown(
+            """
+            <div class="card section-card">
+                <div class="panel-kicker">Weather Engine</div>
+                <h4>Weather Control</h4>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         wc1, wc2, wc3 = st.columns(3)
         with wc1:
             if st.button("Clear", key="weather_clear_btn", use_container_width=True):
@@ -1411,7 +1452,15 @@ def render_game_day():
             st.link_button("Open WNYT Weather", WNYT_WEATHER_URL, use_container_width=True)
 
     elif panel == "emergency":
-        st.markdown("### Emergency Workflow")
+        st.markdown(
+            """
+            <div class="card section-card">
+                <div class="panel-kicker">Emergency Engine</div>
+                <h4>Emergency Workflow</h4>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         e1, e2 = st.columns(2)
         with e1:
             if st.button("🚨 Alert Assignor", key="alert_assignor_btn", use_container_width=True):
@@ -1429,8 +1478,23 @@ def render_game_day():
         render_coverage_engine(game)
 
     elif panel == "nav":
-        st.markdown("### Navigation + Arrival")
-        st.write(f"Navigate to: **{game['site']}**")
+        st.markdown(
+            """
+            <div class="card section-card">
+                <div class="panel-kicker">Navigation Engine</div>
+                <h4>Navigation + Arrival</h4>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        st.markdown(
+            f"""
+            <div class="card compact">
+                <p class="mini-note"><strong>Destination:</strong> {game['site']}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         n1, n2 = st.columns(2)
         with n1:
             if st.button("📍 Open Field Navigation", key="open_nav_btn", use_container_width=True):
