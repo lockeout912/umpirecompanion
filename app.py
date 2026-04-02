@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, date
 import pandas as pd
 
 st.set_page_config(
-    page_title="UmpCompanion",
+    page_title="UmpCompanion-SBUO",
     page_icon="🧢",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -38,10 +38,12 @@ defaults = {
     "crew_chief_contacted": False,
     "last_action": "System ready",
     "schedule_window": "All",
+    "coverage_selected_official": None,
 }
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
+
 
 # =========================================================
 # DATA
@@ -77,7 +79,23 @@ def load_assignments():
         row["game_dt"] = datetime.strptime(f"{row['date']} {row['time']}", "%Y-%m-%d %H:%M")
     return raw
 
+
+def load_official_pool():
+    officials = [
+        {"name": "Cody L.", "home_base": "Ballston Spa", "distance_miles": 7.2, "plate_skill": 84, "base_skill": 88, "availability": "Available", "reliability": 92, "cert": "NFHS", "notes": "Strong hustle, newer but coachable."},
+        {"name": "Mike D.", "home_base": "Saratoga Springs", "distance_miles": 12.5, "plate_skill": 93, "base_skill": 89, "availability": "Maybe", "reliability": 97, "cert": "NFHS + Varsity", "notes": "Veteran presence. Better for plate-heavy spots."},
+        {"name": "Chris M.", "home_base": "Clifton Park", "distance_miles": 9.8, "plate_skill": 79, "base_skill": 91, "availability": "Available", "reliability": 90, "cert": "NFHS", "notes": "Efficient on bases, dependable fill."},
+        {"name": "Dan R.", "home_base": "Niskayuna", "distance_miles": 15.4, "plate_skill": 88, "base_skill": 85, "availability": "Available", "reliability": 86, "cert": "NFHS", "notes": "Solid all-around option."},
+        {"name": "Joe S.", "home_base": "Halfmoon", "distance_miles": 4.1, "plate_skill": 74, "base_skill": 83, "availability": "Available", "reliability": 80, "cert": "Rec + Travel", "notes": "Fastest arrival window. Better for base coverage."},
+        {"name": "Matt P.", "home_base": "Guilderland", "distance_miles": 21.3, "plate_skill": 90, "base_skill": 87, "availability": "Maybe", "reliability": 89, "cert": "NFHS + College", "notes": "Excellent upside, farther travel."},
+        {"name": "Rob T.", "home_base": "Queensbury", "distance_miles": 28.6, "plate_skill": 82, "base_skill": 84, "availability": "Unavailable", "reliability": 91, "cert": "NFHS", "notes": "Good official but currently blocked."},
+    ]
+    return officials
+
+
 assignments = load_assignments()
+official_pool = load_official_pool()
+
 
 # =========================================================
 # HELPERS
@@ -85,11 +103,14 @@ assignments = load_assignments()
 def format_dt(dt):
     return dt.strftime("%I:%M %p").lstrip("0") if dt else "—"
 
+
 def format_game_date(dt):
     return dt.strftime("%a, %b %d")
 
+
 def format_currency(val):
     return f"${val:,.2f}"
+
 
 def format_td(td):
     total_seconds = max(0, int(td.total_seconds()))
@@ -99,6 +120,7 @@ def format_td(td):
     if hours > 0:
         return f"{hours:02}:{minutes:02}:{seconds:02}"
     return f"{minutes:02}:{seconds:02}"
+
 
 def get_selected_game():
     if not assignments:
@@ -112,6 +134,7 @@ def get_selected_game():
     upcoming = sorted(assignments, key=lambda x: x["game_dt"])
     return upcoming[0]
 
+
 def set_selected_game(game_id):
     st.session_state.selected_game_id = game_id
     st.session_state.checked_in = False
@@ -121,19 +144,25 @@ def set_selected_game(game_id):
     st.session_state.weather_status = "clear"
     st.session_state.active_panel = "rules"
     st.session_state.rule_result_visible = False
+    st.session_state.coverage_selected_official = None
     st.session_state.last_action = f"Selected Game #{game_id}"
+
 
 def get_plate_meeting_time(game_dt):
     return game_dt - timedelta(minutes=5)
 
+
 def get_partner_name(position):
     return "Mike D." if position == "Plate" else "Chris M."
+
 
 def get_partner_eta_minutes():
     return 6
 
+
 def get_ruleset(sport_level):
     return "Modified Youth Rules" if "8U" in sport_level else "NFHS / Summer Ball"
+
 
 def get_schedule_df(data):
     rows = []
@@ -152,6 +181,7 @@ def get_schedule_df(data):
         })
     return pd.DataFrame(rows)
 
+
 def get_dashboard_metrics(data):
     today = date.today()
     today_games = [g for g in data if g["game_dt"].date() == today]
@@ -161,6 +191,7 @@ def get_dashboard_metrics(data):
     plate_count = sum(1 for g in data if g["position"] == "Plate")
     base_count = sum(1 for g in data if g["position"] == "Base")
     return today_games, next_game, total_fees, plate_count, base_count
+
 
 def analyze_schedule_patterns(data):
     issues = []
@@ -176,7 +207,7 @@ def analyze_schedule_patterns(data):
             issues.append({
                 "level": "good",
                 "title": f"Doubleheader on {game_date}",
-                "message": f"Two games scheduled. Operationally normal if travel and turnaround stay clean."
+                "message": "Two games scheduled. Operationally normal if travel and turnaround stay clean."
             })
         elif len(games) >= 3:
             issues.append({
@@ -206,6 +237,7 @@ def analyze_schedule_patterns(data):
                     })
 
     return issues
+
 
 def get_schedule_agent_note(data):
     now = datetime.now()
@@ -248,6 +280,7 @@ def get_schedule_agent_note(data):
         "level": "good"
     }
 
+
 def get_plate_status(td, checked_in):
     secs = td.total_seconds()
     if secs > 900 and checked_in:
@@ -262,10 +295,12 @@ def get_plate_status(td, checked_in):
         return ("Conference Due / Start Now", "critical")
     return ("Past Due", "critical")
 
+
 def get_checkin_text():
     if st.session_state.checked_in and st.session_state.check_in_time:
         return f"Checked in {format_dt(st.session_state.check_in_time)}"
     return "Not checked in"
+
 
 def get_clock_status(selected_minutes):
     if st.session_state.game_started and st.session_state.first_pitch_time:
@@ -277,6 +312,7 @@ def get_clock_status(selected_minutes):
             return "Final 15 minutes"
         return "Clock running"
     return "Clock not started"
+
 
 def get_ops_note(game, plate_meeting_countdown, selected_minutes):
     if st.session_state.weather_status == "lightning":
@@ -330,7 +366,56 @@ def get_ops_note(game, plate_meeting_countdown, selected_minutes):
         "action": "Monitor timing, weather, and arrival."
     }
 
+
+def score_official(game, official):
+    if official["availability"] == "Unavailable":
+        return None
+
+    role_skill = official["plate_skill"] if game["position"] == "Plate" else official["base_skill"]
+    availability_score = 100 if official["availability"] == "Available" else 70
+    distance_score = max(0, 100 - int(official["distance_miles"] * 3))
+    reliability_score = official["reliability"]
+
+    weighted_score = (
+        role_skill * 0.35
+        + availability_score * 0.25
+        + distance_score * 0.20
+        + reliability_score * 0.20
+    )
+
+    urgency = "High" if official["distance_miles"] > 20 or official["availability"] == "Maybe" else "Normal"
+
+    return {
+        **official,
+        "fit_score": round(weighted_score, 1),
+        "role_skill_used": role_skill,
+        "distance_score": distance_score,
+        "availability_score": availability_score,
+        "urgency": urgency,
+    }
+
+
+def get_coverage_candidates(game):
+    ranked = []
+    for official in official_pool:
+        scored = score_official(game, official)
+        if scored is not None:
+            ranked.append(scored)
+    return sorted(ranked, key=lambda x: x["fit_score"], reverse=True)
+
+
+def build_assignor_message(game, candidate):
+    return (
+        f"Coverage recommendation for Game #{game['game_id']}: "
+        f"{game['home']} vs {game['away']} on {format_game_date(game['game_dt'])} at {format_dt(game['game_dt'])}, "
+        f"site {game['site']}. Best current replacement option is {candidate['name']} "
+        f"({candidate['availability']}, {candidate['distance_miles']} miles away, fit score {candidate['fit_score']}). "
+        f"Recommended action: contact immediately for {game['position']} coverage."
+    )
+
+
 limits = {"1:45": 105, "2:00": 120, "2:10": 130}
+
 
 # =========================================================
 # STYLES
@@ -399,6 +484,7 @@ div[data-testid="stMetric"] {
 </style>
 """, unsafe_allow_html=True)
 
+
 # =========================================================
 # NAV
 # =========================================================
@@ -424,6 +510,7 @@ def render_topbar():
     with c4:
         if st.button("Reports", key="nav_reports", use_container_width=True):
             st.session_state.page = "Reports"
+
 
 # =========================================================
 # DASHBOARD
@@ -487,6 +574,7 @@ def render_dashboard():
             st.write("No pattern issues detected.")
         st.markdown("</div>", unsafe_allow_html=True)
 
+
 # =========================================================
 # SCHEDULE
 # =========================================================
@@ -510,6 +598,7 @@ def filter_assignments(data, window_filter, position_filter, site_search):
 
     return sorted(filtered, key=lambda x: x["game_dt"])
 
+
 def render_schedule_summary(filtered):
     total_fees = sum(g["fee"] for g in filtered)
     plate_count = sum(1 for g in filtered if g["position"] == "Plate")
@@ -524,6 +613,7 @@ def render_schedule_summary(filtered):
         st.metric("Plate", plate_count)
     with d:
         st.metric("Base", base_count)
+
 
 def render_schedule_cards(filtered):
     st.markdown("### Assignment Cards")
@@ -553,6 +643,7 @@ def render_schedule_cards(filtered):
                 if st.button(f"Open Game Day #{g['game_id']}", key=f"open_gameday_{g['game_id']}", use_container_width=True):
                     set_selected_game(g["game_id"])
                     st.session_state.page = "Game Day"
+
 
 def render_schedule():
     st.subheader("My Schedule")
@@ -589,6 +680,68 @@ def render_schedule():
 
     render_schedule_cards(filtered[:10])
 
+
+# =========================================================
+# COVERAGE ENGINE
+# =========================================================
+def render_coverage_engine(game):
+    candidates = get_coverage_candidates(game)
+    top_candidate = candidates[0] if candidates else None
+
+    if top_candidate:
+        st.markdown(
+            f"""
+            <div class="card agent-warning">
+                <h4>Coverage Agent</h4>
+                <p><strong>Top replacement: {top_candidate['name']}</strong></p>
+                <p>{top_candidate['availability']} • {top_candidate['distance_miles']} miles • fit score {top_candidate['fit_score']}</p>
+                <p>{top_candidate['notes']}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        candidate_df = pd.DataFrame([
+            {
+                "Official": c["name"],
+                "Availability": c["availability"],
+                "Miles": c["distance_miles"],
+                "Fit Score": c["fit_score"],
+                "Role Skill": c["role_skill_used"],
+                "Reliability": c["reliability"],
+                "Cert": c["cert"],
+                "Urgency": c["urgency"],
+            }
+            for c in candidates
+        ])
+        st.dataframe(candidate_df, use_container_width=True, hide_index=True)
+
+        option_map = {
+            f"{c['name']} • fit {c['fit_score']} • {c['availability']} • {c['distance_miles']} mi": c["name"]
+            for c in candidates
+        }
+        selected_label = st.selectbox("Select replacement option", list(option_map.keys()), key="coverage_choice")
+        selected_name = option_map[selected_label]
+        selected_candidate = next(c for c in candidates if c["name"] == selected_name)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Mark as Recommended", key="recommend_coverage", use_container_width=True):
+                st.session_state.coverage_selected_official = selected_candidate["name"]
+                st.success(f"{selected_candidate['name']} marked as recommended replacement.")
+        with c2:
+            if st.button("Draft Assignor Message", key="draft_assignor_message", use_container_width=True):
+                st.session_state.coverage_selected_official = selected_candidate["name"]
+                st.info("Assignor draft generated below.")
+
+        if st.session_state.coverage_selected_official == selected_candidate["name"]:
+            st.markdown("### Assignor Draft")
+            st.code(build_assignor_message(game, selected_candidate), language="text")
+
+    else:
+        st.error("No available coverage candidates found in the current pool.")
+
+
 # =========================================================
 # GAME DAY
 # =========================================================
@@ -612,7 +765,7 @@ def render_game_day():
 
     selected_limit = st.session_state["game_limit"]
     selected_minutes = limits[selected_limit]
-    plate_status_text, plate_status_level = get_plate_status(
+    plate_status_text, _ = get_plate_status(
         plate_meeting_countdown,
         st.session_state.checked_in
     )
@@ -790,12 +943,7 @@ def render_game_day():
 
     elif panel == "sub":
         st.markdown("### Substitute Coverage")
-        if st.button("🔄 Scan Nearest Available", key="scan_sub_btn", use_container_width=True):
-            st.session_state.sub_scan_done = True
-            st.info("Nearest qualified official 4.2 miles away notified. Assignor copied.")
-        if st.button("📤 Notify Assignor of Coverage Risk", key="notify_assignor_sub_btn", use_container_width=True):
-            st.session_state.sub_assignor_notified = True
-            st.warning("Coverage risk notification sent.")
+        render_coverage_engine(game)
 
     elif panel == "nav":
         st.markdown("### Navigation + Arrival")
@@ -804,6 +952,7 @@ def render_game_day():
             st.success("Preferred parking and route workflow opened.")
         if st.button("🧭 View Arrival Notes", key="arrival_notes_btn", use_container_width=True):
             st.info("Arrival note: park behind first-base side concessions and walk to plate area.")
+
 
 # =========================================================
 # REPORTS
@@ -836,6 +985,7 @@ def render_reports():
             f"During the assignment, an incident categorized as '{incident_type}' was observed. "
             f"Initial notes: {notes if notes else '[no notes entered]'}"
         )
+
 
 # =========================================================
 # APP RENDER
