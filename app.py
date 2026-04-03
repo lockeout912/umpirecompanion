@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import datetime, timedelta, date
 import pandas as pd
+from urllib.parse import quote_plus
 
 st.set_page_config(
     page_title="UmpCompanion",
@@ -14,6 +15,17 @@ st.set_page_config(
 # =========================================================
 WNYT_RADAR_URL = "https://wnyt.com/radar/"
 WNYT_WEATHER_URL = "https://wnyt.com/weather/"
+
+NFHS_BASEBALL_RULES_URL = "https://nfhs.org/sports/baseball/rules"
+NFHS_BASEBALL_RESOURCES_URL = "https://nfhs.org/sports/baseball/resources"
+NFHS_BASEBALL_INTERPRETATIONS_URL = "https://nfhs.org/resources/sports/baseball-rules-interpretations-2026"
+NFHS_BASEBALL_POINTS_OF_EMPHASIS_URL = "https://nfhs.org/resources/sports/baseball-points-of-emphasis-2026"
+
+LL_RULES_POLICIES_URL = "https://www.littleleague.org/playing-rules/rules-regulations-policies/"
+LL_PLAYING_RULES_URL = "https://www.littleleague.org/playing-rules/"
+LL_RULEBOOK_APP_URL = "https://www.littleleague.org/playing-rules/little-league-rulebook-app/"
+LL_RULE_CHANGES_URL = "https://www.littleleague.org/playing-rules/rule-changes/"
+LL_MANDATORY_PLAY_URL = "https://www.littleleague.org/university/articles/mandatory-play-what-parents-need-to-know/"
 
 # =========================================================
 # SESSION STATE
@@ -33,6 +45,8 @@ defaults = {
         "Award the obstructed runner at least one base beyond the base they would have reached without obstruction. "
         "Place all other runners accordingly."
     ),
+    "rule_quickplay_text": "",
+    "rules_code_set": "NFHS",
     "active_panel": "rules",
     "game_limit": "2:00",
     "sub_scan_done": False,
@@ -501,6 +515,388 @@ def build_live_feed_items():
 
 
 limits = {"1:45": 105, "2:00": 120, "2:10": 130}
+
+# =========================================================
+# RULES AGENT
+# =========================================================
+def build_rule_result(title, quick_answer, why, mechanic, confidence, source_label, source_url, secondary_sources):
+    return {
+        "title": title,
+        "quick_answer": quick_answer,
+        "why": why,
+        "mechanic": mechanic,
+        "confidence": confidence,
+        "source_label": source_label,
+        "source_url": source_url,
+        "secondary_sources": secondary_sources,
+    }
+
+
+def get_rules_sources(code_set, topic):
+    topic = (topic or "").lower()
+
+    if code_set == "NFHS":
+        primary_url = NFHS_BASEBALL_RULES_URL
+        primary_label = "NFHS Baseball Rules"
+        secondary = [
+            ("NFHS Baseball Resources", NFHS_BASEBALL_RESOURCES_URL),
+            ("NFHS Baseball Interpretations 2026", NFHS_BASEBALL_INTERPRETATIONS_URL),
+            ("NFHS Baseball Points of Emphasis 2026", NFHS_BASEBALL_POINTS_OF_EMPHASIS_URL),
+        ]
+
+        if "interpret" in topic or "case play" in topic:
+            primary_url = NFHS_BASEBALL_INTERPRETATIONS_URL
+            primary_label = "NFHS Baseball Interpretations 2026"
+        elif "signal" in topic or "mechanic" in topic:
+            primary_url = NFHS_BASEBALL_RESOURCES_URL
+            primary_label = "NFHS Baseball Resources"
+
+        return primary_label, primary_url, secondary
+
+    primary_url = LL_RULES_POLICIES_URL
+    primary_label = "Little League Rules / Regulations / Policies"
+    secondary = [
+        ("Little League Playing Rules", LL_PLAYING_RULES_URL),
+        ("Little League Rulebook App", LL_RULEBOOK_APP_URL),
+        ("Little League Rule Changes 2026", LL_RULE_CHANGES_URL),
+        ("Little League Mandatory Play", LL_MANDATORY_PLAY_URL),
+    ]
+
+    if "mandatory play" in topic or "minimum play" in topic:
+        primary_url = LL_MANDATORY_PLAY_URL
+        primary_label = "Little League Mandatory Play"
+    elif "pitch count" in topic or "re-entry" in topic or "tournament" in topic:
+        primary_url = LL_RULES_POLICIES_URL
+        primary_label = "Little League Rules / Regulations / Policies"
+    elif "app" in topic or "rulebook" in topic:
+        primary_url = LL_RULEBOOK_APP_URL
+        primary_label = "Little League Rulebook App"
+
+    return primary_label, primary_url, secondary
+
+
+def rules_agent_lookup(code_set, inquiry):
+    q = (inquiry or "").strip().lower()
+    primary_label, primary_url, secondary = get_rules_sources(code_set, q)
+
+    if not q:
+        return build_rule_result(
+            title=f"{code_set} Rules Agent",
+            quick_answer="Describe the play or rule question to get a quick ruling path.",
+            why="The stronger your description, the stronger the answer. Include outs, runners, contact, and result.",
+            mechanic="State the play in sequence: pitch, batted ball, contact, throw, tag, result.",
+            confidence="Low",
+            source_label=primary_label,
+            source_url=primary_url,
+            secondary_sources=secondary,
+        )
+
+    # Common shared baseball topics
+    if "obstruction" in q or ("obstruct" in q and "interference" not in q):
+        if code_set == "NFHS":
+            return build_rule_result(
+                title="Obstruction",
+                quick_answer="Call obstruction and protect the runner. If a play is being made on the obstructed runner, treat it as immediate-dead-ball obstruction; otherwise allow action, then award bases.",
+                why="NFHS obstruction enforcement hinges on whether a play is being made on the obstructed runner.",
+                mechanic="Point and verbalize obstruction. Then kill it if required and place runners with conviction.",
+                confidence="High",
+                source_label=primary_label,
+                source_url=primary_url,
+                secondary_sources=secondary,
+            )
+        return build_rule_result(
+            title="Obstruction",
+            quick_answer="Call obstruction, protect the runner, and enforce the proper award based on the live play and Little League code treatment.",
+            why="Obstruction is still runner protection first, then proper award/placement.",
+            mechanic="Point, verbalize, then enforce awards clearly.",
+            confidence="Medium",
+            source_label=primary_label,
+            source_url=primary_url,
+            secondary_sources=secondary,
+        )
+
+    if "interference" in q or "interferes" in q or "interfere" in q:
+        return build_rule_result(
+            title="Interference",
+            quick_answer="Call interference and enforce the out / dead-ball consequence required by the situation.",
+            why="Interference is offense hindering defense. Ball status and who is declared out depend on who interfered and when.",
+            mechanic="Kill it hard and separate interference language from obstruction language.",
+            confidence="High",
+            source_label=primary_label,
+            source_url=primary_url,
+            secondary_sources=secondary,
+        )
+
+    if "infield fly" in q or (("first and second" in q or "bases loaded" in q) and "popup" in q):
+        return build_rule_result(
+            title="Infield Fly",
+            quick_answer="Declare infield fly if fair fly conditions are met with fewer than two outs and force-play runners in the proper setup.",
+            why="That call exists to remove the cheap double-play trap on ordinary-effort infield popups.",
+            mechanic="Point up and verbalize 'Infield fly, batter is out' — add 'if fair' near the line.",
+            confidence="High",
+            source_label=primary_label,
+            source_url=primary_url,
+            secondary_sources=secondary,
+        )
+
+    if "dropped third" in q or "dropped 3rd" in q or ("third strike" in q and "dropped" in q):
+        return build_rule_result(
+            title="Dropped Third Strike",
+            quick_answer="Batter may try for first with first base unoccupied and fewer than two outs, or with two outs regardless of occupancy.",
+            why="The batter is not automatically retired unless the code conditions make him so or the defense records the out.",
+            mechanic="Sell strike three first, then stay alive on the batter-runner.",
+            confidence="High",
+            source_label=primary_label,
+            source_url=primary_url,
+            secondary_sources=secondary,
+        )
+
+    if "foul tip" in q:
+        return build_rule_result(
+            title="Foul Tip",
+            quick_answer="If it goes sharp/direct from the bat to the catcher’s hand or mitt and is legally caught, it is a foul tip and the ball stays live.",
+            why="A foul tip is not just any little nick foul. It has to be direct and caught.",
+            mechanic="Signal strike and keep the ball alive.",
+            confidence="High",
+            source_label=primary_label,
+            source_url=primary_url,
+            secondary_sources=secondary,
+        )
+
+    if "balk" in q:
+        return build_rule_result(
+            title="Balk",
+            quick_answer="If the pitcher illegally starts, simulates, or violates the set-position requirements with runners aboard, enforce a balk under the selected code set.",
+            why="Balk enforcement can feel similar across codes in spirit, but exact enforcement detail still belongs to the selected ruleset.",
+            mechanic="Call it clean and enforce base awards with no drama.",
+            confidence="Medium",
+            source_label=primary_label,
+            source_url=primary_url,
+            secondary_sources=secondary,
+        )
+
+    if "hit by pitch" in q or "hbp" in q or "pitch hits batter" in q:
+        return build_rule_result(
+            title="Hit By Pitch",
+            quick_answer="Award first if the batter is entitled to it under the selected code set.",
+            why="The real issue is whether the batter was entitled to the award and whether any exception removes it.",
+            mechanic="Kill it, award first, move forced runners.",
+            confidence="High",
+            source_label=primary_label,
+            source_url=primary_url,
+            secondary_sources=secondary,
+        )
+
+    if "appeal" in q or "left early" in q or "missed the base" in q:
+        return build_rule_result(
+            title="Appeal Play",
+            quick_answer="Confirm the defense is making a proper appeal, then enforce the out if the appeal is valid under the selected ruleset.",
+            why="Appeal plays live in procedure. The defense has to actually appeal it correctly.",
+            mechanic="Slow down, confirm appeal action, then rule firmly.",
+            confidence="Medium",
+            source_label=primary_label,
+            source_url=primary_url,
+            secondary_sources=secondary,
+        )
+
+    if code_set == "Little League" and ("mandatory play" in q or "minimum play" in q):
+        return build_rule_result(
+            title="Mandatory Play",
+            quick_answer="Little League mandatory play requires minimum participation for eligible rostered players. Verify exact division / tournament context from the official source.",
+            why="Mandatory-play issues can change by division and competition context, so the official Little League lane matters here.",
+            mechanic="Do not wing it. Verify before game management decisions.",
+            confidence="Medium",
+            source_label="Little League Mandatory Play",
+            source_url=LL_MANDATORY_PLAY_URL,
+            secondary_sources=secondary,
+        )
+
+    if code_set == "Little League" and ("pitch count" in q or "re-entry" in q or "reentry" in q):
+        return build_rule_result(
+            title="Little League Roster / Pitching Question",
+            quick_answer="This belongs in the Little League regulations / policies lane. Use the official Little League source before ruling.",
+            why="Pitch count, re-entry, and tournament roster questions are exactly where people get burned by guessing.",
+            mechanic="Pause, verify, then enforce.",
+            confidence="Medium",
+            source_label="Little League Rules / Regulations / Policies",
+            source_url=LL_RULES_POLICIES_URL,
+            secondary_sources=secondary,
+        )
+
+    return build_rule_result(
+        title=f"{code_set} Rules Agent",
+        quick_answer="I do not have a strong enough pattern match yet for a confident quick ruling.",
+        why="Add more detail: outs, runners, who made contact, live/dead ball status, where the throw went, and what happened after the act.",
+        mechanic="Describe it in baseball sequence and I’ll tighten the answer.",
+        confidence="Low",
+        source_label=primary_label,
+        source_url=primary_url,
+        secondary_sources=secondary,
+    )
+
+
+def render_rules_engine():
+    st.markdown(
+        """
+        <div class="card section-card">
+            <div class="panel-kicker">Rules Agent</div>
+            <h4>NFHS / Little League Quick Ruling Desk</h4>
+            <p class="mini-note">Get the fast answer first, then jump straight to the official source lane.</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    top1, top2 = st.columns([1, 2])
+    with top1:
+        code_set = st.radio(
+            "Rule Set",
+            ["NFHS", "Little League"],
+            key="rules_code_set",
+            horizontal=True
+        )
+    with top2:
+        st.markdown(
+            f"""
+            <div class="card compact">
+                <div class="panel-kicker">Active Rule Set</div>
+                <h4>{code_set}</h4>
+                <p class="mini-note">Your inquiry and quick answer will follow this code set.</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.markdown("### Quick Topic Buttons")
+    r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+    with r1c1:
+        if st.button("Obstruction", key="quick_obstruction", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Runner advancing is obstructed by a fielder while a play is being made on him."
+            st.session_state.last_action = f"Quick rule template loaded: Obstruction ({code_set})"
+    with r1c2:
+        if st.button("Interference", key="quick_interference", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Runner interferes with a fielder trying to field a batted ball."
+            st.session_state.last_action = f"Quick rule template loaded: Interference ({code_set})"
+    with r1c3:
+        if st.button("Infield Fly", key="quick_infield_fly", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Runners on first and second, one out, high popup on the infield."
+            st.session_state.last_action = f"Quick rule template loaded: Infield Fly ({code_set})"
+    with r1c4:
+        if st.button("Dropped 3rd", key="quick_dropped_third", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Swinging third strike not caught by the catcher with two outs."
+            st.session_state.last_action = f"Quick rule template loaded: Dropped Third Strike ({code_set})"
+
+    r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+    with r2c1:
+        if st.button("Balk", key="quick_balk", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Pitcher starts illegally and stops with runners on base."
+            st.session_state.last_action = f"Quick rule template loaded: Balk ({code_set})"
+    with r2c2:
+        if st.button("Foul Tip", key="quick_foul_tip", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Ball goes sharp off the bat directly to the catcher’s mitt and is held."
+            st.session_state.last_action = f"Quick rule template loaded: Foul Tip ({code_set})"
+    with r2c3:
+        if st.button("HBP", key="quick_hbp", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Pitched ball hits the batter while in the box."
+            st.session_state.last_action = f"Quick rule template loaded: Hit By Pitch ({code_set})"
+    with r2c4:
+        if st.button("Appeal", key="quick_appeal", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Defense appeals that the runner left early on a caught fly ball."
+            st.session_state.last_action = f"Quick rule template loaded: Appeal ({code_set})"
+
+    r3c1, r3c2, r3c3, r3c4 = st.columns(4)
+    with r3c1:
+        if st.button("Mandatory Play", key="quick_mandatory_play", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Mandatory play question for a rostered player in Little League."
+            st.session_state.last_action = f"Quick rule template loaded: Mandatory Play ({code_set})"
+    with r3c2:
+        if st.button("Pitch Count", key="quick_pitch_count", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Pitch count eligibility question in Little League."
+            st.session_state.last_action = f"Quick rule template loaded: Pitch Count ({code_set})"
+    with r3c3:
+        if st.button("Re-Entry", key="quick_reentry", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Re-entry question for a substituted player."
+            st.session_state.last_action = f"Quick rule template loaded: Re-Entry ({code_set})"
+    with r3c4:
+        if st.button("Clear Input", key="clear_rule_input", use_container_width=True):
+            st.session_state.rule_quickplay_text = ""
+            st.session_state.rule_result_visible = False
+            st.session_state.last_action = "Rules input cleared"
+            st.rerun()
+
+    inquiry = st.text_area(
+        "Describe the play or ask the rule question",
+        value=st.session_state.rule_quickplay_text,
+        height=140,
+        key="rules_textarea"
+    )
+
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        if st.button("Get Quick Ruling", key="get_ruling", use_container_width=True):
+            result = rules_agent_lookup(code_set, inquiry)
+            st.session_state.rule_result_title = result["title"]
+            st.session_state.rule_result_text = result
+            st.session_state.rule_result_visible = True
+            st.session_state.last_action = f"Rules agent ran: {result['title']}"
+    with c2:
+        search_term = quote_plus(inquiry if inquiry else f"{code_set} baseball rules")
+        if code_set == "NFHS":
+            st.link_button(
+                "Open NFHS Rules",
+                f"{NFHS_BASEBALL_RULES_URL}?q={search_term}",
+                use_container_width=True
+            )
+        else:
+            st.link_button(
+                "Open Little League Rules",
+                LL_RULES_POLICIES_URL,
+                use_container_width=True
+            )
+
+    if st.session_state.rule_result_visible and isinstance(st.session_state.rule_result_text, dict):
+        result = st.session_state.rule_result_text
+
+        st.markdown(
+            f"""
+            <div class="card compact">
+                <div class="panel-kicker">Quick Ruling</div>
+                <h4>{result['title']}</h4>
+                <p class="mini-note"><strong>Quick Answer:</strong> {result['quick_answer']}</p>
+                <p class="mini-note"><strong>Why:</strong> {result['why']}</p>
+                <p class="mini-note"><strong>Mechanic:</strong> {result['mechanic']}</p>
+                <p class="mini-note"><strong>Confidence:</strong> {result['confidence']}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown("### Official Source Lane")
+        s1, s2 = st.columns([1.2, 1.8])
+        with s1:
+            st.markdown(
+                f"""
+                <div class="card compact">
+                    <div class="panel-kicker">Primary Source</div>
+                    <h4>{result['source_label']}</h4>
+                    <p class="mini-note">Use this for the official lane on this question.</p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            st.link_button("Open Primary Source", result["source_url"], use_container_width=True)
+
+        with s2:
+            st.markdown(
+                """
+                <div class="card compact">
+                    <div class="panel-kicker">Secondary Official Sources</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            for label, url in result["secondary_sources"]:
+                st.link_button(label, url, use_container_width=True)
 
 # =========================================================
 # STYLES
@@ -1034,35 +1430,6 @@ def render_schedule_summary(filtered):
         st.metric("Base", base_count)
 
 
-def render_schedule_cards(filtered):
-    st.markdown("### Assignment Cards")
-    if not filtered:
-        st.info("No games match the current filters.")
-        return
-
-    for g in filtered[:6]:
-        st.markdown(
-            f"""
-            <div class="card compact">
-                <h4>Game #{g['game_id']} • {format_game_date(g['game_dt'])} • {format_dt(g['game_dt'])}</h4>
-                <p class="mini-note"><strong>{g['home']}</strong> vs <strong>{g['away']}</strong></p>
-                <p class="mini-note">{short_site(g['site'])}</p>
-                <p class="mini-note">{g['position']} • Fee {format_currency(g['fee'])} • {g['status']}</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button(f"Activate #{g['game_id']}", key=f"activate_{g['game_id']}", use_container_width=True):
-                set_selected_game(g["game_id"])
-                st.success(f"Game #{g['game_id']} is now active.")
-        with c2:
-            if st.button(f"Open Game Day #{g['game_id']}", key=f"open_gameday_{g['game_id']}", use_container_width=True):
-                set_selected_game(g["game_id"])
-                st.session_state.page = "Game Day"
-
-
 def render_schedule():
     st.subheader("My Schedule")
 
@@ -1096,7 +1463,32 @@ def render_schedule():
         unsafe_allow_html=True
     )
 
-    render_schedule_cards(filtered)
+    st.markdown("### Assignment Cards")
+    if not filtered:
+        st.info("No games match the current filters.")
+        return
+
+    for g in filtered[:6]:
+        st.markdown(
+            f"""
+            <div class="card compact">
+                <h4>Game #{g['game_id']} • {format_game_date(g['game_dt'])} • {format_dt(g['game_dt'])}</h4>
+                <p class="mini-note"><strong>{g['home']}</strong> vs <strong>{g['away']}</strong></p>
+                <p class="mini-note">{short_site(g['site'])}</p>
+                <p class="mini-note">{g['position']} • Fee {format_currency(g['fee'])} • {g['status']}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button(f"Activate #{g['game_id']}", key=f"activate_{g['game_id']}", use_container_width=True):
+                set_selected_game(g["game_id"])
+                st.success(f"Game #{g['game_id']} is now active.")
+        with c2:
+            if st.button(f"Open Game Day #{g['game_id']}", key=f"open_gameday_{g['game_id']}", use_container_width=True):
+                set_selected_game(g["game_id"])
+                st.session_state.page = "Game Day"
 
 # =========================================================
 # COVERAGE ENGINE
@@ -1347,36 +1739,7 @@ def render_game_day():
     panel = st.session_state.active_panel
 
     if panel == "rules":
-        st.markdown(
-            """
-            <div class="card section-card">
-                <div class="panel-kicker">Rules Engine</div>
-                <h4>Rule Lookup</h4>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        st.text_area(
-            "Describe the play",
-            "Runner on first, ground ball to shortstop. Fielder obstructs the runner.",
-            height=120,
-            key="rules_textarea"
-        )
-        if st.button("Get Exact Ruling", key="get_ruling", use_container_width=True):
-            st.session_state.rule_result_visible = True
-            st.session_state.last_action = "Rule result generated"
-
-        if st.session_state.rule_result_visible:
-            st.markdown(
-                f"""
-                <div class="card compact">
-                    <div class="panel-kicker">Rule Result</div>
-                    <h4>{st.session_state.rule_result_title}</h4>
-                    <p class="mini-note">{st.session_state.rule_result_text}</p>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+        render_rules_engine()
 
     elif panel == "clock":
         st.markdown(
