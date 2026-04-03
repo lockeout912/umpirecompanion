@@ -27,6 +27,8 @@ LL_RULEBOOK_APP_URL = "https://www.littleleague.org/playing-rules/little-league-
 LL_RULE_CHANGES_URL = "https://www.littleleague.org/playing-rules/rule-changes/"
 LL_MANDATORY_PLAY_URL = "https://www.littleleague.org/university/articles/mandatory-play-what-parents-need-to-know/"
 
+GAME_LIMITS = {"1:45": 105, "2:00": 120, "2:10": 130}
+
 # =========================================================
 # SESSION STATE
 # =========================================================
@@ -129,13 +131,15 @@ def format_currency(val):
 
 
 def format_td(td):
-    total_seconds = max(0, int(td.total_seconds()))
+    total_seconds = int(td.total_seconds())
+    sign = "-" if total_seconds < 0 else ""
+    total_seconds = abs(total_seconds)
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
     seconds = total_seconds % 60
     if hours > 0:
-        return f"{hours:02}:{minutes:02}:{seconds:02}"
-    return f"{minutes:02}:{seconds:02}"
+        return f"{sign}{hours:02}:{minutes:02}:{seconds:02}"
+    return f"{sign}{minutes:02}:{seconds:02}"
 
 
 def short_site(site):
@@ -149,11 +153,11 @@ def get_selected_game():
         for game in assignments:
             if game["game_id"] == st.session_state.selected_game_id:
                 return game
-    return sorted(assignments, key=lambda x: x["game_dt"])[0]
+    upcoming = sorted([g for g in assignments if g["game_dt"] >= datetime.now()], key=lambda x: x["game_dt"])
+    return upcoming[0] if upcoming else sorted(assignments, key=lambda x: x["game_dt"])[0]
 
 
-def set_selected_game(game_id):
-    st.session_state.selected_game_id = game_id
+def reset_game_session_state():
     st.session_state.checked_in = False
     st.session_state.check_in_time = None
     st.session_state.game_started = False
@@ -162,6 +166,14 @@ def set_selected_game(game_id):
     st.session_state.active_panel = "rules"
     st.session_state.rule_result_visible = False
     st.session_state.coverage_selected_official = None
+    st.session_state.emergency_triggered = False
+    st.session_state.nav_opened = False
+    st.session_state.nav_notes_opened = False
+
+
+def set_selected_game(game_id):
+    st.session_state.selected_game_id = game_id
+    reset_game_session_state()
     st.session_state.last_action = f"Selected Game #{game_id}"
 
 
@@ -230,7 +242,7 @@ def analyze_schedule_patterns(data):
             issues.append({
                 "level": "warning",
                 "title": f"Heavy Workload on {game_date}",
-                "message": f"{len(games)} games scheduled that day. That’s a grinder. Stay sharp on pacing and travel."
+                "message": f"{len(games)} games scheduled that day. Stay sharp on pacing and travel."
             })
 
         for i in range(len(games) - 1):
@@ -345,7 +357,7 @@ def get_coverage_status():
         return "Assignor notified of coverage risk"
     if st.session_state.sub_scan_done:
         return "Replacement scan completed"
-    return "No active coverage issue"
+    return "Demo mode"
 
 
 def get_next_game_countdown_text():
@@ -513,9 +525,6 @@ def build_live_feed_items():
 
     return items
 
-
-limits = {"1:45": 105, "2:00": 120, "2:10": 130}
-
 # =========================================================
 # RULES AGENT
 # =========================================================
@@ -558,14 +567,14 @@ def get_rules_sources(code_set, topic):
     secondary = [
         ("Little League Playing Rules", LL_PLAYING_RULES_URL),
         ("Little League Rulebook App", LL_RULEBOOK_APP_URL),
-        ("Little League Rule Changes 2026", LL_RULE_CHANGES_URL),
+        ("Little League Rule Changes", LL_RULE_CHANGES_URL),
         ("Little League Mandatory Play", LL_MANDATORY_PLAY_URL),
     ]
 
     if "mandatory play" in topic or "minimum play" in topic:
         primary_url = LL_MANDATORY_PLAY_URL
         primary_label = "Little League Mandatory Play"
-    elif "pitch count" in topic or "re-entry" in topic or "tournament" in topic:
+    elif "pitch count" in topic or "re-entry" in topic or "reentry" in topic or "tournament" in topic:
         primary_url = LL_RULES_POLICIES_URL
         primary_label = "Little League Rules / Regulations / Policies"
     elif "app" in topic or "rulebook" in topic:
@@ -583,22 +592,21 @@ def rules_agent_lookup(code_set, inquiry):
         return build_rule_result(
             title=f"{code_set} Rules Agent",
             quick_answer="Describe the play or rule question to get a quick ruling path.",
-            why="The stronger your description, the stronger the answer. Include outs, runners, contact, and result.",
-            mechanic="State the play in sequence: pitch, batted ball, contact, throw, tag, result.",
+            why="The better the play description, the better the ruling. Include outs, runners, contact, and result.",
+            mechanic="State the play in order: pitch, batted ball, contact, throw, tag, result.",
             confidence="Low",
             source_label=primary_label,
             source_url=primary_url,
             secondary_sources=secondary,
         )
 
-    # Common shared baseball topics
     if "obstruction" in q or ("obstruct" in q and "interference" not in q):
         if code_set == "NFHS":
             return build_rule_result(
                 title="Obstruction",
-                quick_answer="Call obstruction and protect the runner. If a play is being made on the obstructed runner, treat it as immediate-dead-ball obstruction; otherwise allow action, then award bases.",
-                why="NFHS obstruction enforcement hinges on whether a play is being made on the obstructed runner.",
-                mechanic="Point and verbalize obstruction. Then kill it if required and place runners with conviction.",
+                quick_answer="Call obstruction and protect the runner. If a play is being made on the obstructed runner, treat it as immediate-dead-ball obstruction; otherwise let action continue, then award bases.",
+                why="NFHS obstruction enforcement turns on whether a play is being made on the obstructed runner.",
+                mechanic="Point and verbalize obstruction. Then kill it if required and place runners decisively.",
                 confidence="High",
                 source_label=primary_label,
                 source_url=primary_url,
@@ -606,9 +614,9 @@ def rules_agent_lookup(code_set, inquiry):
             )
         return build_rule_result(
             title="Obstruction",
-            quick_answer="Call obstruction, protect the runner, and enforce the proper award based on the live play and Little League code treatment.",
-            why="Obstruction is still runner protection first, then proper award/placement.",
-            mechanic="Point, verbalize, then enforce awards clearly.",
+            quick_answer="Call obstruction, protect the runner, and enforce the proper award under Little League rules.",
+            why="Obstruction is runner protection first, then placement.",
+            mechanic="Point, verbalize, then enforce awards cleanly.",
             confidence="Medium",
             source_label=primary_label,
             source_url=primary_url,
@@ -619,8 +627,8 @@ def rules_agent_lookup(code_set, inquiry):
         return build_rule_result(
             title="Interference",
             quick_answer="Call interference and enforce the out / dead-ball consequence required by the situation.",
-            why="Interference is offense hindering defense. Ball status and who is declared out depend on who interfered and when.",
-            mechanic="Kill it hard and separate interference language from obstruction language.",
+            why="Interference is offense hindering defense. Ball status and who is out depend on who interfered and when.",
+            mechanic="Kill it hard and keep interference language separate from obstruction language.",
             confidence="High",
             source_label=primary_label,
             source_url=primary_url,
@@ -630,8 +638,8 @@ def rules_agent_lookup(code_set, inquiry):
     if "infield fly" in q or (("first and second" in q or "bases loaded" in q) and "popup" in q):
         return build_rule_result(
             title="Infield Fly",
-            quick_answer="Declare infield fly if fair fly conditions are met with fewer than two outs and force-play runners in the proper setup.",
-            why="That call exists to remove the cheap double-play trap on ordinary-effort infield popups.",
+            quick_answer="Declare infield fly if the conditions are met with fewer than two outs and the proper runner setup.",
+            why="The call prevents the cheap double-play trap on ordinary-effort infield popups.",
             mechanic="Point up and verbalize 'Infield fly, batter is out' — add 'if fair' near the line.",
             confidence="High",
             source_label=primary_label,
@@ -642,8 +650,8 @@ def rules_agent_lookup(code_set, inquiry):
     if "dropped third" in q or "dropped 3rd" in q or ("third strike" in q and "dropped" in q):
         return build_rule_result(
             title="Dropped Third Strike",
-            quick_answer="Batter may try for first with first base unoccupied and fewer than two outs, or with two outs regardless of occupancy.",
-            why="The batter is not automatically retired unless the code conditions make him so or the defense records the out.",
+            quick_answer="Batter may attempt first with first base unoccupied and fewer than two outs, or with two outs regardless of occupancy.",
+            why="The batter is not automatically retired unless rule conditions say so or the defense records the out.",
             mechanic="Sell strike three first, then stay alive on the batter-runner.",
             confidence="High",
             source_label=primary_label,
@@ -654,8 +662,8 @@ def rules_agent_lookup(code_set, inquiry):
     if "foul tip" in q:
         return build_rule_result(
             title="Foul Tip",
-            quick_answer="If it goes sharp/direct from the bat to the catcher’s hand or mitt and is legally caught, it is a foul tip and the ball stays live.",
-            why="A foul tip is not just any little nick foul. It has to be direct and caught.",
+            quick_answer="If the ball goes sharp/direct from the bat to the catcher’s hand or mitt and is legally caught, it is a foul tip and the ball remains live.",
+            why="A foul tip is not just any little nick foul. It must be direct and caught.",
             mechanic="Signal strike and keep the ball alive.",
             confidence="High",
             source_label=primary_label,
@@ -666,9 +674,9 @@ def rules_agent_lookup(code_set, inquiry):
     if "balk" in q:
         return build_rule_result(
             title="Balk",
-            quick_answer="If the pitcher illegally starts, simulates, or violates the set-position requirements with runners aboard, enforce a balk under the selected code set.",
-            why="Balk enforcement can feel similar across codes in spirit, but exact enforcement detail still belongs to the selected ruleset.",
-            mechanic="Call it clean and enforce base awards with no drama.",
+            quick_answer="If the pitcher illegally starts, simulates, or violates legal pitching requirements with runners aboard, enforce a balk under the selected code set.",
+            why="Balk enforcement lives in the details, so the selected code set matters.",
+            mechanic="Call it clean and enforce base awards with no confusion.",
             confidence="Medium",
             source_label=primary_label,
             source_url=primary_url,
@@ -679,7 +687,7 @@ def rules_agent_lookup(code_set, inquiry):
         return build_rule_result(
             title="Hit By Pitch",
             quick_answer="Award first if the batter is entitled to it under the selected code set.",
-            why="The real issue is whether the batter was entitled to the award and whether any exception removes it.",
+            why="The real issue is whether the batter was entitled to the award and whether any exception applies.",
             mechanic="Kill it, award first, move forced runners.",
             confidence="High",
             source_label=primary_label,
@@ -691,7 +699,7 @@ def rules_agent_lookup(code_set, inquiry):
         return build_rule_result(
             title="Appeal Play",
             quick_answer="Confirm the defense is making a proper appeal, then enforce the out if the appeal is valid under the selected ruleset.",
-            why="Appeal plays live in procedure. The defense has to actually appeal it correctly.",
+            why="Appeal plays live in procedure. The defense must actually appeal it correctly.",
             mechanic="Slow down, confirm appeal action, then rule firmly.",
             confidence="Medium",
             source_label=primary_label,
@@ -703,8 +711,8 @@ def rules_agent_lookup(code_set, inquiry):
         return build_rule_result(
             title="Mandatory Play",
             quick_answer="Little League mandatory play requires minimum participation for eligible rostered players. Verify exact division / tournament context from the official source.",
-            why="Mandatory-play issues can change by division and competition context, so the official Little League lane matters here.",
-            mechanic="Do not wing it. Verify before game management decisions.",
+            why="Mandatory-play questions change by division and competition context, so official verification matters.",
+            mechanic="Do not wing it. Verify first.",
             confidence="Medium",
             source_label="Little League Mandatory Play",
             source_url=LL_MANDATORY_PLAY_URL,
@@ -714,8 +722,8 @@ def rules_agent_lookup(code_set, inquiry):
     if code_set == "Little League" and ("pitch count" in q or "re-entry" in q or "reentry" in q):
         return build_rule_result(
             title="Little League Roster / Pitching Question",
-            quick_answer="This belongs in the Little League regulations / policies lane. Use the official Little League source before ruling.",
-            why="Pitch count, re-entry, and tournament roster questions are exactly where people get burned by guessing.",
+            quick_answer="This belongs in the Little League regulations / policies lane. Use the official source before ruling.",
+            why="Pitch count, re-entry, and tournament roster questions are where guesses get people smoked.",
             mechanic="Pause, verify, then enforce.",
             confidence="Medium",
             source_label="Little League Rules / Regulations / Policies",
@@ -726,8 +734,8 @@ def rules_agent_lookup(code_set, inquiry):
     return build_rule_result(
         title=f"{code_set} Rules Agent",
         quick_answer="I do not have a strong enough pattern match yet for a confident quick ruling.",
-        why="Add more detail: outs, runners, who made contact, live/dead ball status, where the throw went, and what happened after the act.",
-        mechanic="Describe it in baseball sequence and I’ll tighten the answer.",
+        why="Add more detail: outs, runners, contact, live/dead ball status, where the throw went, and what happened after the act.",
+        mechanic="Describe the play in baseball sequence and I’ll tighten the answer.",
         confidence="Low",
         source_label=primary_label,
         source_url=primary_url,
@@ -741,7 +749,7 @@ def render_rules_engine():
         <div class="card section-card">
             <div class="panel-kicker">Rules Agent</div>
             <h4>NFHS / Little League Quick Ruling Desk</h4>
-            <p class="mini-note">Get the fast answer first, then jump straight to the official source lane.</p>
+            <p class="mini-note">Fast answer first. Official source lane second.</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -761,7 +769,7 @@ def render_rules_engine():
             <div class="card compact">
                 <div class="panel-kicker">Active Rule Set</div>
                 <h4>{code_set}</h4>
-                <p class="mini-note">Your inquiry and quick answer will follow this code set.</p>
+                <p class="mini-note">Your inquiry and quick answer follow this code set.</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -840,19 +848,10 @@ def render_rules_engine():
             st.session_state.rule_result_visible = True
             st.session_state.last_action = f"Rules agent ran: {result['title']}"
     with c2:
-        search_term = quote_plus(inquiry if inquiry else f"{code_set} baseball rules")
         if code_set == "NFHS":
-            st.link_button(
-                "Open NFHS Rules",
-                f"{NFHS_BASEBALL_RULES_URL}?q={search_term}",
-                use_container_width=True
-            )
+            st.link_button("Open NFHS Rules", NFHS_BASEBALL_RULES_URL, use_container_width=True)
         else:
-            st.link_button(
-                "Open Little League Rules",
-                LL_RULES_POLICIES_URL,
-                use_container_width=True
-            )
+            st.link_button("Open Little League Rules", LL_RULES_POLICIES_URL, use_container_width=True)
 
     if st.session_state.rule_result_visible and isinstance(st.session_state.rule_result_text, dict):
         result = st.session_state.rule_result_text
@@ -1129,7 +1128,6 @@ div[data-testid="stMetricValue"] {
     100% { transform: translateX(-50%); }
 }
 
-/* Snapshot grid */
 .command-grid {
     display: grid;
     grid-template-columns: repeat(8, 1fr);
@@ -1183,7 +1181,7 @@ def render_topbar():
     </div>
     """, unsafe_allow_html=True)
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         if st.button("Dashboard", key="nav_dashboard", use_container_width=True):
             st.session_state.page = "Dashboard"
@@ -1196,6 +1194,10 @@ def render_topbar():
     with c4:
         if st.button("Reports", key="nav_reports", use_container_width=True):
             st.session_state.page = "Reports"
+    with c5:
+        if st.button("Refresh Live View", key="nav_refresh", use_container_width=True):
+            st.session_state.last_action = "Live view refreshed"
+            st.rerun()
 
 # =========================================================
 # DASHBOARD
@@ -1383,8 +1385,8 @@ def render_dashboard():
                 <h4>Operations Snapshot</h4>
                 <p class="mini-note"><strong>Coverage:</strong> {get_coverage_status()}</p>
                 <p class="mini-note"><strong>Check-In:</strong> {get_checkin_text()}</p>
-                <p class="mini-note"><strong>NFHS Pulse:</strong> Obstruction / interference communication emphasis</p>
-                <p class="mini-note"><strong>Org Pulse:</strong> Professional appearance and strong pregame presence</p>
+                <p class="mini-note"><strong>Rules:</strong> Live rules agent operational</p>
+                <p class="mini-note"><strong>Weather:</strong> Live link operational</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -1494,6 +1496,7 @@ def render_schedule():
 # COVERAGE ENGINE
 # =========================================================
 def render_coverage_engine(game):
+    st.warning("Coverage / subs are still demo mode.")
     candidates = get_coverage_candidates(game)
     top_candidate = candidates[0] if candidates else None
 
@@ -1504,7 +1507,7 @@ def render_coverage_engine(game):
     st.markdown(
         f"""
         <div class="card section-card agent-warning">
-            <div class="panel-kicker">Coverage Engine</div>
+            <div class="panel-kicker">Coverage Engine • Demo Mode</div>
             <h4>Top replacement: {top_candidate['name']}</h4>
             <p class="mini-note">{top_candidate['availability']} • {top_candidate['distance_miles']} miles • fit score {top_candidate['fit_score']}</p>
             <p class="mini-note">{top_candidate['notes']}</p>
@@ -1528,44 +1531,15 @@ def render_coverage_engine(game):
     ])
     st.dataframe(candidate_df, use_container_width=True, hide_index=True)
 
-    option_map = {
-        f"{c['name']} • fit {c['fit_score']} • {c['availability']} • {c['distance_miles']} mi": c["name"]
-        for c in candidates
-    }
-    selected_label = st.selectbox("Select replacement option", list(option_map.keys()), key="coverage_choice")
-    selected_name = option_map[selected_label]
-    selected_candidate = next(c for c in candidates if c["name"] == selected_name)
-
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        if st.button("Mark as Recommended", key="recommend_coverage", use_container_width=True):
-            st.session_state.coverage_selected_official = selected_candidate["name"]
-            st.session_state.last_action = f"Coverage recommendation set to {selected_candidate['name']}"
-            st.success(f"{selected_candidate['name']} marked as recommended replacement.")
-    with c2:
-        if st.button("Draft Assignor Message", key="draft_assignor_message", use_container_width=True):
-            st.session_state.coverage_selected_official = selected_candidate["name"]
-            st.session_state.sub_assignor_notified = True
-            st.session_state.last_action = "Assignor coverage draft generated"
-            st.info("Assignor draft generated below.")
-    with c3:
-        if st.button("Scan Again", key="scan_again_coverage", use_container_width=True):
-            st.session_state.sub_scan_done = True
-            st.session_state.last_action = "Coverage scan refreshed"
-            st.success("Coverage scan refreshed.")
-
-    if st.session_state.coverage_selected_official == selected_candidate["name"]:
-        st.markdown("### Assignor Draft")
-        st.code(build_assignor_message(game, selected_candidate), language="text")
-
 # =========================================================
 # INCIDENT ENGINE
 # =========================================================
 def render_incident_engine(game):
+    st.warning("Reports / incident generation are still demo mode.")
     st.markdown(
         """
         <div class="card section-card agent-warning">
-            <div class="panel-kicker">Incident Engine</div>
+            <div class="panel-kicker">Incident Engine • Demo Mode</div>
             <h4>Build an assignor-ready incident draft</h4>
             <p class="mini-note">Log the event once, then let the app structure it cleanly.</p>
         </div>
@@ -1609,6 +1583,19 @@ def render_incident_engine(game):
         st.code(st.session_state.incident_generated_text, language="text")
 
 # =========================================================
+# CERTIFICATIONS PANEL
+# =========================================================
+def render_certifications_demo():
+    st.warning("Certifications are still demo mode.")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.success("2026 NFHS Annual Test: 92% — Passed")
+        st.write("Last clinic attendance: March 28")
+    with c2:
+        st.info("Plate mechanics review: current")
+        st.write("Association profile: active and eligible")
+
+# =========================================================
 # GAME DAY
 # =========================================================
 def render_game_day():
@@ -1630,7 +1617,7 @@ def render_game_day():
     plate_meeting_countdown = plate_meeting_time - current_time
 
     selected_limit = st.session_state["game_limit"]
-    selected_minutes = limits[selected_limit]
+    selected_minutes = GAME_LIMITS[selected_limit]
     plate_status_text, _ = get_plate_status(plate_meeting_countdown, st.session_state.checked_in)
     ops_note = get_ops_note(game, plate_meeting_countdown, selected_minutes)
 
@@ -1712,6 +1699,7 @@ def render_game_day():
             st.session_state.checked_in = True
             st.session_state.check_in_time = datetime.now()
             st.session_state.last_action = f"Checked in for Game #{game['game_id']} at {format_dt(st.session_state.check_in_time)}"
+            st.rerun()
     with r1c2:
         if st.button("📖 Rules", key="gd_rules", use_container_width=True):
             st.session_state.active_panel = "rules"
@@ -1736,6 +1724,15 @@ def render_game_day():
         if st.button("📝 Incident", key="gd_incident", use_container_width=True):
             st.session_state.active_panel = "incident"
 
+    demo1, demo2 = st.columns(2)
+    with demo1:
+        if st.button("🎓 Certifications", key="gd_certs", use_container_width=True):
+            st.session_state.active_panel = "certifications"
+    with demo2:
+        if st.button("🔄 Refresh Panel", key="gd_refresh_panel", use_container_width=True):
+            st.session_state.last_action = "Game Day panel refreshed"
+            st.rerun()
+
     panel = st.session_state.active_panel
 
     if panel == "rules":
@@ -1759,27 +1756,36 @@ def render_game_day():
                 st.session_state.game_started = True
                 st.session_state.first_pitch_time = datetime.now()
                 st.session_state.last_action = f"Game #{game['game_id']} clock started"
+                st.rerun()
         with c2:
             if st.button("↺ Reset Clock", key="reset_clock", use_container_width=True):
                 st.session_state.game_started = False
                 st.session_state.first_pitch_time = None
                 st.session_state.last_action = f"Game #{game['game_id']} clock reset"
+                st.rerun()
 
         if st.session_state.game_started and st.session_state.first_pitch_time:
             elapsed = datetime.now() - st.session_state.first_pitch_time
-            remaining = timedelta(minutes=limits[st.session_state["game_limit"]]) - elapsed
+            remaining = timedelta(minutes=GAME_LIMITS[st.session_state["game_limit"]]) - elapsed
 
             mc1, mc2 = st.columns(2)
             with mc1:
                 st.metric("Elapsed", format_td(elapsed))
             with mc2:
                 st.metric("Remaining", format_td(remaining))
+
+            if remaining.total_seconds() <= 0:
+                st.error("Time limit reached.")
+            elif remaining.total_seconds() <= 900:
+                st.warning("Final 15 minutes.")
+            else:
+                st.success("Clock running.")
         else:
             mc1, mc2 = st.columns(2)
             with mc1:
                 st.metric("Elapsed", "00:00")
             with mc2:
-                st.metric("Remaining", f"{limits[st.session_state['game_limit']]}:00")
+                st.metric("Remaining", f"{GAME_LIMITS[st.session_state['game_limit']]}:00")
 
     elif panel == "weather":
         st.markdown(
@@ -1796,14 +1802,17 @@ def render_game_day():
             if st.button("Clear", key="weather_clear_btn", use_container_width=True):
                 st.session_state.weather_status = "clear"
                 st.session_state.last_action = "Weather set to Clear"
+                st.rerun()
         with wc2:
             if st.button("Caution", key="weather_caution_btn", use_container_width=True):
                 st.session_state.weather_status = "caution"
                 st.session_state.last_action = "Weather set to Caution"
+                st.rerun()
         with wc3:
             if st.button("Lightning", key="weather_lightning_btn", use_container_width=True):
                 st.session_state.weather_status = "lightning"
                 st.session_state.last_action = "Weather set to Lightning"
+                st.rerun()
 
         wt, wd = get_weather_summary()
         st.info(f"{wt}: {wd}")
@@ -1837,7 +1846,6 @@ def render_game_day():
                 st.success("Crew chief contact lane opened.")
 
     elif panel == "sub":
-        st.markdown("### Substitute Coverage")
         render_coverage_engine(game)
 
     elif panel == "nav":
@@ -1871,14 +1879,17 @@ def render_game_day():
                 st.info("Arrival note: park behind first-base side concessions and walk to plate area.")
 
     elif panel == "incident":
-        st.markdown("### Incident Workflow")
         render_incident_engine(game)
+
+    elif panel == "certifications":
+        render_certifications_demo()
 
 # =========================================================
 # REPORTS
 # =========================================================
 def render_reports():
     st.subheader("Reports + Logs")
+    st.warning("Reports are still demo mode.")
 
     game = get_selected_game()
     if game:
@@ -1893,10 +1904,7 @@ def render_reports():
             unsafe_allow_html=True
         )
 
-    if game:
-        render_incident_engine(game)
-    else:
-        st.info("No game is active right now. Select a game first.")
+    render_incident_engine(game)
 
 # =========================================================
 # APP RENDER
