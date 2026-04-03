@@ -27,12 +27,9 @@ defaults = {
     "first_pitch_time": None,
     "weather_status": "clear",
     "rule_result_visible": False,
-    "rule_result_title": "NFHS Rule 2-32 — Obstruction",
-    "rule_result_text": (
-        "Immediate dead ball on Type A obstruction when a play is being made on the obstructed runner. "
-        "Award the obstructed runner at least one base beyond the base they would have reached without obstruction. "
-        "Place all other runners accordingly."
-    ),
+    "rule_result_title": "NFHS Rule Guidance",
+    "rule_result_text": "Describe the play and generate a ruling.",
+    "rule_quickplay_text": "",
     "active_panel": "rules",
     "game_limit": "2:00",
     "sub_scan_done": False,
@@ -461,46 +458,253 @@ def build_incident_report(game, incident_type, severity, inning, notes):
         f"Recommended follow-up: review with assignor / board leadership and retain for organizational record."
     )
 
-
-def build_live_feed_items():
-    _, next_game, total_fees, plate_count, base_count = get_dashboard_metrics(assignments)
-    weather_title, weather_detail = get_weather_summary()
-    schedule_note = get_schedule_agent_note(assignments)
-    pattern_notes = analyze_schedule_patterns(assignments)
-    selected_game = get_selected_game()
-
-    items = [
-        f"🌤 Weather: {weather_title} • {weather_detail}",
-        "📣 Org Note: SBUO reminder — clean hat, polished shoes, strong plate presence",
-        "📖 NFHS Update: obstruction / interference communication remains a point of emphasis",
-        f"🧢 Next Assignment: Game #{next_game['game_id']} • {short_site(next_game['site'])} • {format_game_date(next_game['game_dt'])} • {format_dt(next_game['game_dt'])}",
-        f"⏳ Countdown: {get_next_game_countdown_text()}",
-        f"💰 Fee Board: {len(assignments)} games loaded • total fees {format_currency(total_fees)}",
-        f"📍 Coverage Status: {get_coverage_status()}",
-        f"🎯 Schedule Agent: {schedule_note['title']}",
-        f"⚾ Role Split: Plate {plate_count} • Base {base_count}",
-        f"✅ Last Action: {st.session_state.last_action}",
-    ]
-
-    if pattern_notes:
-        items.append(f"🚦 Ops Signal: {pattern_notes[0]['title']}")
-
-    if selected_game:
-        items.append(f"🗂 Active Game: #{selected_game['game_id']} • {selected_game['home']} vs {selected_game['away']}")
-
-    if st.session_state.checked_in:
-        items.append(f"✅ Check-In Live: {get_checkin_text()}")
-
-    if st.session_state.game_started:
-        items.append("⏱ Game Clock Active")
-
-    if st.session_state.emergency_triggered:
-        items.append("🚨 Emergency workflow has been triggered")
-
-    return items
+# =========================================================
+# RULES ENGINE
+# =========================================================
+def build_rule_result(title, call, ball_status, penalty, mechanic, confidence, category):
+    return {
+        "title": title,
+        "call": call,
+        "ball_status": ball_status,
+        "penalty": penalty,
+        "mechanic": mechanic,
+        "confidence": confidence,
+        "category": category,
+    }
 
 
-limits = {"1:45": 105, "2:00": 120, "2:10": 130}
+def analyze_rule_situation(text):
+    t = (text or "").strip().lower()
+
+    if not t:
+        return build_rule_result(
+            "No Play Description Entered",
+            "Enter a play description or use a quick-play button.",
+            "N/A",
+            "No ruling generated.",
+            "Describe the play in plain baseball language.",
+            "Low",
+            "General"
+        )
+
+    # obstruction
+    if "obstruction" in t or ("obstruct" in t and "interference" not in t):
+        return build_rule_result(
+            "Obstruction",
+            "Call obstruction. Protect the runner.",
+            "Type A / immediate-dead-ball situations when a play is being made on the obstructed runner. Otherwise delayed dead ball.",
+            "Award bases you judge would have been reached absent obstruction. Place other runners accordingly.",
+            "Point, verbalize obstruction clearly, then enforce awards decisively.",
+            "High",
+            "Obstruction"
+        )
+
+    # interference
+    if "interference" in t or "interferes" in t or "interfere" in t:
+        return build_rule_result(
+            "Interference",
+            "Call interference and enforce the appropriate out / penalties.",
+            "Usually dead ball immediately when interference is recognized.",
+            "The runner or batter-runner commonly closest to the act is out unless specific rule language requires otherwise. Return other runners if needed.",
+            "Kill it hard. Separate interference from obstruction verbally so nobody confuses the two.",
+            "High",
+            "Interference"
+        )
+
+    # infield fly
+    if "infield fly" in t or ("runners on first and second" in t and "popup" in t) or ("bases loaded" in t and "popup" in t):
+        return build_rule_result(
+            "Infield Fly",
+            "Declare infield fly if conditions are met.",
+            "Ball remains live.",
+            "Batter is out if it is a fair fly ball that can be caught with ordinary effort and first and second, or bases loaded, with less than two outs.",
+            "Point up, verbalize 'Infield fly, batter is out.' If near foul line, add 'if fair.'",
+            "High",
+            "Infield Fly"
+        )
+
+    # foul tip
+    if "foul tip" in t:
+        return build_rule_result(
+            "Foul Tip",
+            "This is a foul tip if it goes sharp/direct from the bat to the catcher’s hand or mitt and is legally caught.",
+            "Ball remains live.",
+            "Strike on the batter. Runners may advance at own risk because the ball is live.",
+            "Signal strike. Do not kill it like an ordinary foul ball.",
+            "High",
+            "Foul Tip"
+        )
+
+    # dropped third strike
+    if "dropped third" in t or "dropped 3rd" in t or ("third strike" in t and "dropped" in t):
+        return build_rule_result(
+            "Dropped Third Strike",
+            "The batter may attempt first if first base is unoccupied with fewer than two outs, or with two outs regardless of occupancy.",
+            "Ball remains live.",
+            "Defense must retire the batter-runner or force another runner as appropriate.",
+            "Sell the strike first, then stay alive on the batter-runner status.",
+            "High",
+            "Dropped Third Strike"
+        )
+
+    # balk
+    if "balk" in t:
+        return build_rule_result(
+            "Balk",
+            "Call balk when the pitcher illegally simulates or starts and fails to deliver in violation of pitching restrictions.",
+            "In most high-school style enforcement, dead ball unless pitch / play continuation rule set says otherwise in your code set. Prototype assumes dead-ball enforcement approach.",
+            "Award each runner one base.",
+            "Point and verbalize balk immediately. Then enforce one-base awards.",
+            "Medium",
+            "Balk"
+        )
+
+    # hit by pitch
+    if "hit by pitch" in t or "hits the batter" in t or "pitched ball hits batter" in t:
+        return build_rule_result(
+            "Hit By Pitch",
+            "Award first base if the pitch hits the batter and the batter is entitled to the award.",
+            "Dead ball.",
+            "Batter to first unless exceptions apply. Force runners as needed.",
+            "Kill it, point the batter to first, then clean up forced movement.",
+            "High",
+            "Hit By Pitch"
+        )
+
+    # malicious / flagrant contact
+    if "malicious contact" in t or "flagrant contact" in t or ("runner crashes" in t and "fielder" in t):
+        return build_rule_result(
+            "Malicious / Flagrant Contact",
+            "Call the runner out and remove the offender if the contact is judged malicious or flagrant.",
+            "Dead ball immediately.",
+            "Runner out. Other runners returned unless forced by award structure or specific code-set exceptions.",
+            "Kill the play hard. Separate safety/ejection decision from standard collision language.",
+            "Medium",
+            "Malicious Contact"
+        )
+
+    # appeal play
+    if "appeal" in t or "left early" in t or "missed the base" in t:
+        return build_rule_result(
+            "Appeal Play",
+            "Recognize a proper live-ball or dead-ball appeal depending on the situation and code-set procedure.",
+            "Can remain live depending on how the defense executes the appeal.",
+            "If the defense properly appeals and the violation occurred, declare the runner out.",
+            "Do not guess. Confirm the defense is actually appealing, then rule cleanly.",
+            "Medium",
+            "Appeal Play"
+        )
+
+    # catch / no catch
+    if "catch or no catch" in t or "trapped" in t or "dives" in t and "ball" in t:
+        return build_rule_result(
+            "Catch / No Catch",
+            "Rule catch only if secure possession is obtained before the ball touches ground and control is shown through the voluntary release process.",
+            "Live if catch; live or dead depends on follow-up if no catch/foul.",
+            "If no catch, continue ruling on fair/foul and runner liability from there.",
+            "Pause long enough to see complete possession. Then sell catch / no catch with conviction.",
+            "Medium",
+            "Catch / No Catch"
+        )
+
+    return build_rule_result(
+        "General Rule Guidance",
+        "The play description does not match a strong rule pattern yet.",
+        "Depends on play specifics.",
+        "Add more detail: outs, runners, who made contact, whether the ball was live, and what action followed.",
+        "Describe the play in sequence: pitch / batted ball / contact / throw / tag / result.",
+        "Low",
+        "General"
+    )
+
+
+def render_rules_engine():
+    st.markdown(
+        """
+        <div class="card section-card">
+            <div class="panel-kicker">Rules Engine</div>
+            <h4>Field Ruling Support</h4>
+            <p class="mini-note">Use quick-play buttons or describe the play in plain baseball language.</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.markdown("### Quick Play Buttons")
+    q1, q2, q3, q4 = st.columns(4)
+    with q1:
+        if st.button("Obstruction", key="quick_obstruction", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Runner advancing to second is obstructed by the fielder while a play is being made on him."
+            st.session_state.last_action = "Quick rule template loaded: Obstruction"
+    with q2:
+        if st.button("Interference", key="quick_interference", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Runner interferes with the fielder trying to field a batted ball."
+            st.session_state.last_action = "Quick rule template loaded: Interference"
+    with q3:
+        if st.button("Infield Fly", key="quick_infield_fly", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Runners on first and second, one out, high popup on the infield."
+            st.session_state.last_action = "Quick rule template loaded: Infield Fly"
+    with q4:
+        if st.button("Dropped 3rd", key="quick_dropped_third", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Swinging third strike not caught by the catcher with two outs."
+            st.session_state.last_action = "Quick rule template loaded: Dropped Third Strike"
+
+    q5, q6, q7, q8 = st.columns(4)
+    with q5:
+        if st.button("Balk", key="quick_balk", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Pitcher starts his motion and stops illegally with runners on base."
+            st.session_state.last_action = "Quick rule template loaded: Balk"
+    with q6:
+        if st.button("Foul Tip", key="quick_foul_tip", use_container_width=True):
+            st.session_state.rule_quickplay_text = "The ball goes sharp off the bat directly to the catcher’s mitt and is held."
+            st.session_state.last_action = "Quick rule template loaded: Foul Tip"
+    with q7:
+        if st.button("HBP", key="quick_hbp", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Pitched ball hits the batter while he is in the box."
+            st.session_state.last_action = "Quick rule template loaded: Hit By Pitch"
+    with q8:
+        if st.button("Appeal", key="quick_appeal", use_container_width=True):
+            st.session_state.rule_quickplay_text = "Defense appeals that the runner left third base early on a caught fly ball."
+            st.session_state.last_action = "Quick rule template loaded: Appeal Play"
+
+    situation = st.text_area(
+        "Describe the play",
+        value=st.session_state.rule_quickplay_text,
+        height=135,
+        key="rules_textarea"
+    )
+
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        if st.button("Get Exact Ruling", key="get_ruling", use_container_width=True):
+            result = analyze_rule_situation(situation)
+            st.session_state.rule_result_title = result["title"]
+            st.session_state.rule_result_text = result
+            st.session_state.rule_result_visible = True
+            st.session_state.last_action = f"Rule result generated: {result['title']}"
+    with c2:
+        if st.button("Clear Rule Input", key="clear_ruling", use_container_width=True):
+            st.session_state.rule_quickplay_text = ""
+            st.session_state.rule_result_visible = False
+            st.session_state.last_action = "Rule input cleared"
+            st.rerun()
+
+    if st.session_state.rule_result_visible and isinstance(st.session_state.rule_result_text, dict):
+        result = st.session_state.rule_result_text
+        st.markdown(
+            f"""
+            <div class="card compact">
+                <div class="panel-kicker">Rule Result • {result['category']}</div>
+                <h4>{result['title']}</h4>
+                <p class="mini-note"><strong>Call:</strong> {result['call']}</p>
+                <p class="mini-note"><strong>Ball Status:</strong> {result['ball_status']}</p>
+                <p class="mini-note"><strong>Penalty / Placement:</strong> {result['penalty']}</p>
+                <p class="mini-note"><strong>Mechanic:</strong> {result['mechanic']}</p>
+                <p class="mini-note"><strong>Confidence:</strong> {result['confidence']}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 # =========================================================
 # STYLES
@@ -1347,36 +1551,7 @@ def render_game_day():
     panel = st.session_state.active_panel
 
     if panel == "rules":
-        st.markdown(
-            """
-            <div class="card section-card">
-                <div class="panel-kicker">Rules Engine</div>
-                <h4>Rule Lookup</h4>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        st.text_area(
-            "Describe the play",
-            "Runner on first, ground ball to shortstop. Fielder obstructs the runner.",
-            height=120,
-            key="rules_textarea"
-        )
-        if st.button("Get Exact Ruling", key="get_ruling", use_container_width=True):
-            st.session_state.rule_result_visible = True
-            st.session_state.last_action = "Rule result generated"
-
-        if st.session_state.rule_result_visible:
-            st.markdown(
-                f"""
-                <div class="card compact">
-                    <div class="panel-kicker">Rule Result</div>
-                    <h4>{st.session_state.rule_result_title}</h4>
-                    <p class="mini-note">{st.session_state.rule_result_text}</p>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+        render_rules_engine()
 
     elif panel == "clock":
         st.markdown(
